@@ -471,11 +471,18 @@
         max-width: min(60vw, 760px);
       }
 
-      .footer-note-marquee {
-        display: inline-block;
+      .footer-note-track {
+        display: inline-flex;
+        align-items: center;
+        width: max-content;
         white-space: nowrap;
-        padding-left: 100%;
-        animation: noteMarquee 22s linear infinite;
+        will-change: transform;
+        animation: noteMarquee var(--note-duration, 22s) linear infinite;
+      }
+
+      .footer-note-piece {
+        flex: 0 0 auto;
+        white-space: nowrap;
       }
 
       .notice-highlight {
@@ -716,7 +723,7 @@
           transform: translateX(0);
         }
         100% {
-          transform: translateX(-100%);
+          transform: translateX(-50%);
         }
       }
 
@@ -1545,9 +1552,18 @@
         const base = lang === 'ja' ? footerNotice.ja : (footerNotice.en || footerNotice.ja || '');
         if (!base) {
           noticeNode.innerHTML = '';
+          noticeNode.style.removeProperty('--note-duration');
           return;
         }
-        noticeNode.innerHTML = `<span class="footer-note-marquee">${renderNoticeHtml(base, footerNotice.highlight, footerNotice.blink)}</span>`;
+        const rendered = renderNoticeHtml(base, footerNotice.highlight, footerNotice.blink);
+        const duration = Math.min(60, Math.max(18, Math.ceil(rendered.replace(/<[^>]*>/g, '').length * 0.45)));
+        noticeNode.style.setProperty('--note-duration', `${duration}s`);
+        noticeNode.innerHTML = `
+          <span class="footer-note-track" aria-label="${escapeHtml(base)}">
+            <span class="footer-note-piece">${rendered}</span>
+            <span class="footer-note-piece" aria-hidden="true">${rendered}</span>
+          </span>
+        `;
       }
 
       function escapeHtml(value) {
