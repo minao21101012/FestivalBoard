@@ -496,12 +496,13 @@
 
       .admin-actions {
         display: flex;
+        flex-wrap: wrap;
         gap: 8px;
         margin-top: 10px;
       }
 
       .admin-actions button {
-        flex: 1;
+        flex: 1 1 calc(50% - 4px);
         border: 1px solid rgba(255, 255, 255, 0.2);
         background: rgba(255, 255, 255, 0.06);
         color: #eef4ff;
@@ -696,6 +697,8 @@
       <div class="admin-actions">
         <button id="admin-save" type="button">保存</button>
         <button id="admin-reset" type="button">行を初期化</button>
+        <button id="admin-undo" type="button">一つ戻す</button>
+        <button id="admin-redo" type="button">やり直し</button>
         <button id="admin-close" type="button">閉じる</button>
       </div>
       <div id="admin-note" class="admin-note"></div>
@@ -983,6 +986,8 @@
 
       const ADMIN_STORAGE_KEY = 'festival-board-admin-v1';
       const rowSettings = loadRowSettings();
+      const historyStack = [cloneRowSettings(rowSettings)];
+      let historyIndex = 0;
 
       function loadRowSettings() {
         try {
@@ -999,6 +1004,24 @@
 
       function saveRowSettings() {
         window.localStorage.setItem(ADMIN_STORAGE_KEY, JSON.stringify({ rows: rowSettings }));
+      }
+
+      function cloneRowSettings(source) {
+        return JSON.parse(JSON.stringify(source || {}));
+      }
+
+      function replaceRowSettings(next) {
+        Object.keys(rowSettings).forEach((key) => {
+          delete rowSettings[key];
+        });
+        Object.assign(rowSettings, cloneRowSettings(next));
+      }
+
+      function pushHistorySnapshot() {
+        const snapshot = cloneRowSettings(rowSettings);
+        historyStack.splice(historyIndex + 1);
+        historyStack.push(snapshot);
+        historyIndex = historyStack.length - 1;
       }
 
       function escapeHtml(value) {
@@ -1094,6 +1117,8 @@
         const note = document.getElementById('admin-note');
         const saveButton = document.getElementById('admin-save');
         const resetButton = document.getElementById('admin-reset');
+        const undoButton = document.getElementById('admin-undo');
+        const redoButton = document.getElementById('admin-redo');
         const closeButton = document.getElementById('admin-close');
 
         openButton.hidden = false;
@@ -1111,6 +1136,11 @@
           colorField.value = config.color || '#ffd76b';
           blinkField.checked = Boolean(config.blink);
           note.textContent = '';
+        }
+
+        function syncHistoryButtons() {
+          undoButton.disabled = historyIndex <= 0;
+          redoButton.disabled = historyIndex >= historyStack.length - 1;
         }
 
         function openPanel() {
@@ -1146,20 +1176,56 @@
             rowSettings[no] = next;
           }
 
+          pushHistorySnapshot();
           saveRowSettings();
           renderBoard();
           updateStatus();
+          syncHistoryButtons();
           note.textContent = '保存しました';
         }
 
         function resetCurrent() {
           const no = String(noField.value);
           delete rowSettings[no];
+          pushHistorySnapshot();
           saveRowSettings();
           applyForm(no);
           renderBoard();
           updateStatus();
+          syncHistoryButtons();
           note.textContent = '初期化しました';
+        }
+
+        function undoCurrent() {
+          if (historyIndex <= 0) {
+            note.textContent = 'これ以上戻せません';
+            return;
+          }
+
+          historyIndex -= 1;
+          replaceRowSettings(historyStack[historyIndex]);
+          saveRowSettings();
+          applyForm(noField.value);
+          renderBoard();
+          updateStatus();
+          syncHistoryButtons();
+          note.textContent = '1つ前の状態に戻しました';
+        }
+
+        function redoCurrent() {
+          if (historyIndex >= historyStack.length - 1) {
+            note.textContent = 'これ以上やり直せません';
+            return;
+          }
+
+          historyIndex += 1;
+          replaceRowSettings(historyStack[historyIndex]);
+          saveRowSettings();
+          applyForm(noField.value);
+          renderBoard();
+          updateStatus();
+          syncHistoryButtons();
+          note.textContent = '戻した操作をやり直しました';
         }
 
         openButton.addEventListener('click', openPanel);
@@ -1167,6 +1233,9 @@
         noField.addEventListener('change', () => applyForm(noField.value));
         saveButton.addEventListener('click', saveCurrent);
         resetButton.addEventListener('click', resetCurrent);
+        undoButton.addEventListener('click', undoCurrent);
+        redoButton.addEventListener('click', redoCurrent);
+        syncHistoryButtons();
       }
 
       function renderBoard() {
