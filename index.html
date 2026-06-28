@@ -374,6 +374,31 @@
         line-height: 1;
       }
 
+      .time-shift-wrap {
+        position: relative;
+        min-width: 58px;
+        height: 1.1em;
+        overflow: hidden;
+      }
+
+      .time-old,
+      .time-new {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+      }
+
+      .time-old {
+        color: #cfd8e8;
+        animation: timeOldOut 3.2s ease-in-out infinite;
+      }
+
+      .time-new {
+        color: #ffd76b;
+        animation: timeNewIn 3.2s ease-in-out infinite;
+      }
+
       .time-delta {
         margin-top: 3px;
         font-size: 10px;
@@ -383,7 +408,7 @@
 
       .time-cell.time-shifted {
         color: #ffdf82;
-        animation: delayGlow 1.5s ease-in-out infinite;
+        animation: delayGlow 3.2s ease-in-out infinite;
       }
 
       .status-cell {
@@ -428,6 +453,29 @@
         border-top: 1px solid rgba(255, 255, 255, 0.08);
         color: #d2d9e4;
         font-size: 12px;
+      }
+
+      .footer-left {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 0;
+      }
+
+      .footer-note {
+        font-size: 12px;
+        line-height: 1.25;
+        color: #edf2fb;
+        min-height: 1.25em;
+      }
+
+      .notice-highlight {
+        color: #ffd76b;
+        font-weight: 700;
+      }
+
+      .notice-blinkword {
+        animation: numberBlink 0.9s steps(2, end) infinite;
       }
 
       .footer-right {
@@ -628,6 +676,32 @@
         }
       }
 
+      @keyframes timeOldOut {
+        0%,
+        35% {
+          transform: translateX(0);
+          opacity: 1;
+        }
+        55%,
+        100% {
+          transform: translateX(-130%);
+          opacity: 0;
+        }
+      }
+
+      @keyframes timeNewIn {
+        0%,
+        35% {
+          transform: translateX(130%);
+          opacity: 0;
+        }
+        55%,
+        100% {
+          transform: translateX(0);
+          opacity: 1;
+        }
+      }
+
       @media (max-width: 860px) {
         .admin-panel {
           width: min(520px, calc(100vw - 24px));
@@ -724,7 +798,10 @@
           </div>
 
           <div class="footer" id="board-note">
-            <div class="blink">文化祭の案内は変更される場合があります</div>
+            <div class="footer-left">
+              <div class="blink">文化祭の案内は変更される場合があります</div>
+              <div class="footer-note" id="custom-note"></div>
+            </div>
             <div class="footer-right" id="last-update">最新情報を表示中</div>
           </div>
         </div>
@@ -751,7 +828,14 @@
         </label>
         <label>
           状態（日本語）
-          <input id="admin-status" type="text" />
+          <select id="admin-status">
+            <option value="">(空白)</option>
+            <option value="開演前">開演前</option>
+            <option value="まもなく開演">まもなく開演</option>
+            <option value="開演中">開演中</option>
+            <option value="遅延">遅延</option>
+            <option value="中止">中止</option>
+          </select>
         </label>
         <label>
           全体遅延/早発（分）
@@ -792,7 +876,14 @@
           </label>
           <label>
             状態（日本語）
-            <input id="admin-add-status" type="text" value="開演前" />
+            <select id="admin-add-status">
+              <option value="">(空白)</option>
+              <option value="開演前" selected>開演前</option>
+              <option value="まもなく開演">まもなく開演</option>
+              <option value="開演中">開演中</option>
+              <option value="遅延">遅延</option>
+              <option value="中止">中止</option>
+            </select>
           </label>
           <label>
             時刻
@@ -802,20 +893,29 @@
             場所（日本語）
             <input id="admin-add-place" type="text" value="体育館" />
           </label>
-          <label>
-            状態種別
-            <select id="admin-add-status-code">
-              <option value="checkin">checkin</option>
-              <option value="boarding">boarding</option>
-              <option value="lastcall">lastcall</option>
-              <option value="delayed">delayed</option>
-              <option value="departed">departed</option>
-              <option value="cancel">cancel</option>
-            </select>
-          </label>
         </div>
         <div class="admin-actions">
           <button id="admin-add" type="button">この内容で追加</button>
+        </div>
+      </div>
+      <div class="admin-sep">
+        <div class="admin-subtitle">下部の注意事項</div>
+        <div class="admin-grid">
+          <label class="admin-span-2">
+            注意事項（日本語）
+            <input id="admin-notice-ja" type="text" placeholder="例: 飲食は所定の場所でお願いします" />
+          </label>
+          <label>
+            黄色キーワード
+            <input id="admin-notice-highlight" type="text" placeholder="例: 飲食" />
+          </label>
+          <label>
+            点滅キーワード
+            <input id="admin-notice-blink" type="text" placeholder="例: 立入禁止" />
+          </label>
+        </div>
+        <div class="admin-actions">
+          <button id="admin-notice-save" type="button">注意事項を保存</button>
         </div>
       </div>
       <div id="admin-note" class="admin-note"></div>
@@ -1109,6 +1209,7 @@
       const hiddenNos = new Set(adminState.hiddenNos || []);
       const customRows = Array.isArray(adminState.customRows) ? adminState.customRows : [];
       let globalDelayMinutes = Number.isFinite(adminState.delayMinutes) ? Number(adminState.delayMinutes) : 0;
+      let footerNotice = adminState.notice || { ja: '', en: '', highlight: '', blink: '' };
       const historyStack = [cloneAdminStateSnapshot()];
       let historyIndex = 0;
 
@@ -1116,16 +1217,24 @@
         try {
           const raw = window.localStorage.getItem(ADMIN_STORAGE_KEY);
           if (!raw) {
-            return { rows: {}, hiddenNos: [], customRows: [], delayMinutes: 0 };
+            return { rows: {}, hiddenNos: [], customRows: [], delayMinutes: 0, notice: { ja: '', en: '', highlight: '', blink: '' } };
           }
           const parsed = JSON.parse(raw);
           const rows = parsed.rows && typeof parsed.rows === 'object' ? parsed.rows : {};
           const nextHidden = Array.isArray(parsed.hiddenNos) ? parsed.hiddenNos : [];
           const nextCustomRows = Array.isArray(parsed.customRows) ? parsed.customRows : [];
           const delayMinutes = Number.isFinite(parsed.delayMinutes) ? Number(parsed.delayMinutes) : 0;
-          return { rows, hiddenNos: nextHidden, customRows: nextCustomRows, delayMinutes };
+          const notice = parsed.notice && typeof parsed.notice === 'object'
+            ? {
+                ja: parsed.notice.ja || '',
+                en: parsed.notice.en || '',
+                highlight: parsed.notice.highlight || '',
+                blink: parsed.notice.blink || ''
+              }
+            : { ja: '', en: '', highlight: '', blink: '' };
+          return { rows, hiddenNos: nextHidden, customRows: nextCustomRows, delayMinutes, notice };
         } catch (error) {
-          return { rows: {}, hiddenNos: [], customRows: [], delayMinutes: 0 };
+          return { rows: {}, hiddenNos: [], customRows: [], delayMinutes: 0, notice: { ja: '', en: '', highlight: '', blink: '' } };
         }
       }
 
@@ -1136,7 +1245,8 @@
             rows: rowSettings,
             hiddenNos: Array.from(hiddenNos),
             customRows,
-            delayMinutes: globalDelayMinutes
+            delayMinutes: globalDelayMinutes,
+            notice: footerNotice
           })
         );
       }
@@ -1150,7 +1260,8 @@
           rows: cloneRowSettings(rowSettings),
           hiddenNos: Array.from(hiddenNos),
           customRows: cloneRowSettings(customRows),
-          delayMinutes: globalDelayMinutes
+          delayMinutes: globalDelayMinutes,
+          notice: cloneRowSettings(footerNotice)
         };
       }
 
@@ -1175,6 +1286,7 @@
         replaceHiddenNos(snapshot.hiddenNos || []);
         replaceCustomRows(snapshot.customRows || []);
         globalDelayMinutes = Number.isFinite(snapshot.delayMinutes) ? Number(snapshot.delayMinutes) : 0;
+        footerNotice = snapshot.notice || { ja: '', en: '', highlight: '', blink: '' };
       }
 
       function pushHistorySnapshot() {
@@ -1250,6 +1362,50 @@
         }
         const sign = globalDelayMinutes > 0 ? '+' : '';
         return `${sign}${globalDelayMinutes}m`;
+      }
+
+      function statusCodeFromJa(statusJa, fallback) {
+        const value = String(statusJa || '').trim();
+        if (!value) {
+          return fallback || 'checkin';
+        }
+        if (value === 'まもなく開演') {
+          return 'lastcall';
+        }
+        if (value === '開演中') {
+          return 'boarding';
+        }
+        if (value === '遅延') {
+          return 'delayed';
+        }
+        if (value === '中止') {
+          return 'cancel';
+        }
+        return fallback || 'checkin';
+      }
+
+      function renderNoticeHtml(text, highlightWord, blinkWord) {
+        let html = escapeHtml(text || '');
+        const highlight = escapeHtml((highlightWord || '').trim());
+        const blink = escapeHtml((blinkWord || '').trim());
+
+        if (highlight) {
+          html = html.split(highlight).join(`<span class="notice-highlight">${highlight}</span>`);
+        }
+        if (blink) {
+          html = html.split(blink).join(`<span class="notice-blinkword">${blink}</span>`);
+        }
+        return html;
+      }
+
+      function updateFooterNotice() {
+        const noticeNode = document.getElementById('custom-note');
+        if (!noticeNode) {
+          return;
+        }
+        const lang = currentLanguage().key;
+        const base = lang === 'ja' ? footerNotice.ja : (footerNotice.en || footerNotice.ja || '');
+        noticeNode.innerHTML = renderNoticeHtml(base, footerNotice.highlight, footerNotice.blink);
       }
 
       function escapeHtml(value) {
@@ -1356,6 +1512,7 @@
         const shiftedTime = applyDelayToTime(item.time);
         const shiftedClass = globalDelayMinutes !== 0 ? ' time-shifted' : '';
         const delta = delayLabel();
+        const effectiveStatusCode = config.statusCode || item.status;
         const numberClass = 'no-cell';
         const rowClass = `row row-enter${config.color ? ' row-custom-accent' : ''}${config.blink ? ' row-custom-blink' : ''}`;
         const rowStyle = `animation-delay:${index * 40}ms;${config.color ? `--row-accent:${config.color};` : ''}`;
@@ -1370,10 +1527,12 @@
               <span class="lang-chip">${language.label}</span>
             </div>
             <div class="time-cell${shiftedClass}">
-              <span class="time-main">${escapeHtml(shiftedTime)}</span>
+              ${globalDelayMinutes === 0
+                ? `<span class="time-main">${escapeHtml(shiftedTime)}</span>`
+                : `<span class="time-shift-wrap"><span class="time-old">${escapeHtml(item.time)}</span><span class="time-new">${escapeHtml(shiftedTime)}</span></span>`}
               ${delta ? `<span class="time-delta">${escapeHtml(delta)}</span>` : ''}
             </div>
-            <div class="status-cell ${statusClass[item.status] || ''}">
+            <div class="status-cell ${statusClass[effectiveStatusCode] || ''}">
               <span class="status-static">
                 <span class="status-text">${escapeHtml(statusText)}</span>
               </span>
@@ -1414,8 +1573,11 @@
         const addStatusField = document.getElementById('admin-add-status');
         const addTimeField = document.getElementById('admin-add-time');
         const addPlaceField = document.getElementById('admin-add-place');
-        const addStatusCodeField = document.getElementById('admin-add-status-code');
         const addButton = document.getElementById('admin-add');
+        const noticeJaField = document.getElementById('admin-notice-ja');
+        const noticeHighlightField = document.getElementById('admin-notice-highlight');
+        const noticeBlinkField = document.getElementById('admin-notice-blink');
+        const noticeSaveButton = document.getElementById('admin-notice-save');
 
         openButton.hidden = false;
 
@@ -1447,6 +1609,7 @@
             statusField.value = '';
             colorField.value = '#ffd76b';
             blinkField.checked = false;
+            delayField.value = String(globalDelayMinutes);
             deleteButton.textContent = '行を削除';
             return;
           }
@@ -1470,6 +1633,9 @@
           panel.hidden = false;
           refreshNoOptions(noField.value);
           applyForm(noField.value);
+          noticeJaField.value = footerNotice.ja || '';
+          noticeHighlightField.value = footerNotice.highlight || '';
+          noticeBlinkField.value = footerNotice.blink || '';
         }
 
         function closePanel() {
@@ -1486,7 +1652,8 @@
           const previous = rowConfig(no);
           const speakerJa = speakerField.value.trim();
           const titleJa = titleField.value.trim();
-          const statusJa = statusField.value.trim();
+          const statusJa = statusField.value;
+          const statusCode = statusCodeFromJa(statusJa, item.status);
 
           saveButton.disabled = true;
           delaySaveButton.disabled = true;
@@ -1520,6 +1687,7 @@
             speakerI18n,
             titleI18n,
             statusI18n,
+            statusCode,
             color: colorField.value,
             blink: blinkField.checked
           };
@@ -1528,6 +1696,7 @@
             next.speakerJa === (item.speaker.ja || '') &&
             next.titleJa === (item.titles.ja || '') &&
             next.statusJa === (item.statuses.ja || '') &&
+            next.statusCode === item.status &&
             next.color === '#ffd76b' &&
             next.blink === false;
 
@@ -1570,6 +1739,32 @@
           } else {
             note.textContent = `${Math.abs(globalDelayMinutes)}分の早発を反映しました`;
           }
+        }
+
+        async function saveNoticeSetting() {
+          const noticeJa = noticeJaField.value.trim();
+          const highlight = noticeHighlightField.value.trim();
+          const blink = noticeBlinkField.value.trim();
+
+          noticeSaveButton.disabled = true;
+          note.textContent = '注意事項を翻訳中...';
+
+          const noticeEn = noticeJa ? await translateJaText(noticeJa, 'en') : '';
+          footerNotice = {
+            ja: noticeJa,
+            en: noticeEn,
+            highlight,
+            blink
+          };
+
+          pushHistorySnapshot();
+          saveAdminState();
+          updateFooterNotice();
+          updateStatus();
+          syncHistoryButtons();
+
+          noticeSaveButton.disabled = false;
+          note.textContent = '注意事項を保存しました（JP/EN）';
         }
 
         function resetCurrent() {
@@ -1615,10 +1810,10 @@
           const requestedNo = Number(addNoField.value);
           const speakerJa = addSpeakerField.value.trim();
           const titleJa = addTitleField.value.trim();
-          const statusJa = addStatusField.value.trim() || '開演前';
+          const statusJa = addStatusField.value || '開演前';
           const time = addTimeField.value.trim() || '--:--';
           const placeJa = addPlaceField.value.trim() || '体育館';
-          const statusCode = addStatusCodeField.value || 'checkin';
+          const statusCode = statusCodeFromJa(statusJa, 'checkin');
 
           if (!speakerJa || !titleJa) {
             note.textContent = '追加には「公演者」と「開演名」が必要です';
@@ -1670,7 +1865,6 @@
           addStatusField.value = '開演前';
           addTimeField.value = '--:--';
           addPlaceField.value = '体育館';
-          addStatusCodeField.value = 'checkin';
           addNoField.value = '';
           addButton.disabled = false;
           note.textContent = `No.${no} を追加しました`;
@@ -1718,6 +1912,7 @@
         resetButton.addEventListener('click', resetCurrent);
         deleteButton.addEventListener('click', deleteCurrent);
         addButton.addEventListener('click', addNewRow);
+        noticeSaveButton.addEventListener('click', saveNoticeSetting);
         undoButton.addEventListener('click', undoCurrent);
         redoButton.addEventListener('click', redoCurrent);
         syncHistoryButtons();
@@ -1729,6 +1924,7 @@
         const midpoint = Math.ceil(allRows.length / 2);
         rows.innerHTML = allRows.slice(0, midpoint).map(makeRow).join('');
         rows2.innerHTML = allRows.slice(midpoint).map((item, index) => makeRow(item, index + midpoint)).join('');
+        updateFooterNotice();
       }
 
       function updateStatus() {
