@@ -201,6 +201,20 @@
         background: linear-gradient(180deg, rgba(255, 255, 255, 0.015), rgba(0, 0, 0, 0.04));
       }
 
+      .row.row-custom-accent .airline-badge,
+      .row.row-custom-accent .no-cell,
+      .row.row-custom-accent .event-title,
+      .row.row-custom-accent .status-text {
+        color: var(--row-accent, #ffd76b) !important;
+      }
+
+      .row.row-custom-blink .airline-badge,
+      .row.row-custom-blink .no-cell,
+      .row.row-custom-blink .event-title,
+      .row.row-custom-blink .status-text {
+        animation: numberBlink 0.9s steps(2, end) infinite;
+      }
+
       .row:nth-child(2n) {
         background: rgba(255, 255, 255, 0.02);
       }
@@ -421,6 +435,90 @@
         opacity: 0.9;
       }
 
+      .admin-open {
+        position: fixed;
+        right: 16px;
+        bottom: 16px;
+        z-index: 20;
+        border: 1px solid rgba(255, 255, 255, 0.28);
+        background: rgba(10, 15, 21, 0.86);
+        color: #eef4ff;
+        padding: 8px 12px;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        cursor: pointer;
+      }
+
+      .admin-panel {
+        position: fixed;
+        right: 16px;
+        bottom: 60px;
+        z-index: 21;
+        width: min(360px, calc(100vw - 24px));
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: rgba(13, 19, 27, 0.94);
+        border-radius: 12px;
+        box-shadow: 0 14px 36px rgba(0, 0, 0, 0.42);
+        padding: 12px;
+      }
+
+      .admin-title {
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        margin-bottom: 10px;
+      }
+
+      .admin-grid {
+        display: grid;
+        gap: 8px;
+      }
+
+      .admin-grid label {
+        font-size: 11px;
+        color: #d2d9e4;
+        letter-spacing: 0.04em;
+      }
+
+      .admin-grid input,
+      .admin-grid select {
+        width: 100%;
+        margin-top: 4px;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        color: #eef4ff;
+        border-radius: 6px;
+        padding: 7px 8px;
+        font-size: 12px;
+      }
+
+      .admin-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 10px;
+      }
+
+      .admin-actions button {
+        flex: 1;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: rgba(255, 255, 255, 0.06);
+        color: #eef4ff;
+        border-radius: 7px;
+        padding: 8px;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .admin-note {
+        margin-top: 8px;
+        min-height: 1.2em;
+        color: #9cd4ff;
+        font-size: 11px;
+      }
+
       .blink {
         display: inline-flex;
         align-items: center;
@@ -509,8 +607,12 @@
           justify-content: flex-start;
         }
 
-          line-height: 1.15;
+        .event-cell {
           grid-column: 1 / span 2;
+        }
+
+        .event-title {
+          line-height: 1.15;
         }
 
         .footer {
@@ -560,6 +662,44 @@
         <div class="sheet-title">FESTIVAL</div>
       </section>
     </main>
+
+    <button id="admin-open" class="admin-open" hidden>編集</button>
+
+    <section id="admin-panel" class="admin-panel" hidden>
+      <div class="admin-title">管理モード（この端末のみ保存）</div>
+      <div class="admin-grid">
+        <label>
+          対象No.
+          <select id="admin-no"></select>
+        </label>
+        <label>
+          公演者（日本語）
+          <input id="admin-speaker" type="text" />
+        </label>
+        <label>
+          開演名（日本語）
+          <input id="admin-title" type="text" />
+        </label>
+        <label>
+          状態（日本語）
+          <input id="admin-status" type="text" />
+        </label>
+        <label>
+          文字色
+          <input id="admin-color" type="color" value="#ffd76b" />
+        </label>
+        <label>
+          <input id="admin-blink" type="checkbox" />
+          点滅させる
+        </label>
+      </div>
+      <div class="admin-actions">
+        <button id="admin-save" type="button">保存</button>
+        <button id="admin-reset" type="button">行を初期化</button>
+        <button id="admin-close" type="button">閉じる</button>
+      </div>
+      <div id="admin-note" class="admin-note"></div>
+    </section>
 
     <script>
       const flights = [
@@ -841,6 +981,39 @@
         th: ['ผู้แสดง', 'ลำดับ', 'ชื่อรายการ', 'เวลา', 'สถานะ', 'สถานที่']
       };
 
+      const ADMIN_STORAGE_KEY = 'festival-board-admin-v1';
+      const rowSettings = loadRowSettings();
+
+      function loadRowSettings() {
+        try {
+          const raw = window.localStorage.getItem(ADMIN_STORAGE_KEY);
+          if (!raw) {
+            return {};
+          }
+          const parsed = JSON.parse(raw);
+          return parsed.rows && typeof parsed.rows === 'object' ? parsed.rows : {};
+        } catch (error) {
+          return {};
+        }
+      }
+
+      function saveRowSettings() {
+        window.localStorage.setItem(ADMIN_STORAGE_KEY, JSON.stringify({ rows: rowSettings }));
+      }
+
+      function escapeHtml(value) {
+        return String(value)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+
+      function rowConfig(no) {
+        return rowSettings[String(no)] || {};
+      }
+
       function renderClock() {
         clock.textContent = '14:08';
       }
@@ -867,33 +1040,133 @@
       function makeRow(item, index) {
         const number = item.no ?? index + 1;
         const language = currentLanguage();
-        const speaker = getLocalizedText(item.speaker, language.key);
-        const title = getLocalizedText(item.titles, language.key);
-        const statusText = getLocalizedText(item.statuses, language.key);
+        const config = rowConfig(number);
+        const speaker = language.key === 'ja' && config.speakerJa
+          ? config.speakerJa
+          : getLocalizedText(item.speaker, language.key);
+        const title = language.key === 'ja' && config.titleJa
+          ? config.titleJa
+          : getLocalizedText(item.titles, language.key);
+        const statusText = language.key === 'ja' && config.statusJa
+          ? config.statusJa
+          : getLocalizedText(item.statuses, language.key);
         const placeText = getLocalizedText(item.gates, language.key);
         const numberClass = 'no-cell';
-        const rowClass = 'row row-enter';
+        const rowClass = `row row-enter${config.color ? ' row-custom-accent' : ''}${config.blink ? ' row-custom-blink' : ''}`;
+        const rowStyle = `animation-delay:${index * 40}ms;${config.color ? `--row-accent:${config.color};` : ''}`;
         return `
-          <div class="${rowClass}" style="animation-delay:${index * 40}ms">
+          <div class="${rowClass}" style="${rowStyle}">
             <div class="airline-cell">
-              <span class="airline-badge">${speaker || '—'}</span>
+              <span class="airline-badge">${escapeHtml(speaker || '—')}</span>
             </div>
             <div class="${numberClass}">${number}</div>
             <div class="event-cell">
-              <div class="event-title">${title}</div>
+              <div class="event-title">${escapeHtml(title)}</div>
               <span class="lang-chip">${language.label}</span>
             </div>
             <div class="time-cell">${item.time}</div>
             <div class="status-cell ${statusClass[item.status] || ''}">
               <span class="status-static">
-                <span class="status-text">${statusText}</span>
+                <span class="status-text">${escapeHtml(statusText)}</span>
               </span>
             </div>
             <div class="gate-cell">
-              <div class="gate-number">${placeText}</div>
+              <div class="gate-number">${escapeHtml(placeText)}</div>
             </div>
           </div>
         `;
+      }
+
+      function setupAdminPanel() {
+        const isAdminMode = new URLSearchParams(window.location.search).get('admin') === '1';
+        if (!isAdminMode) {
+          return;
+        }
+
+        const openButton = document.getElementById('admin-open');
+        const panel = document.getElementById('admin-panel');
+        const noField = document.getElementById('admin-no');
+        const speakerField = document.getElementById('admin-speaker');
+        const titleField = document.getElementById('admin-title');
+        const statusField = document.getElementById('admin-status');
+        const colorField = document.getElementById('admin-color');
+        const blinkField = document.getElementById('admin-blink');
+        const note = document.getElementById('admin-note');
+        const saveButton = document.getElementById('admin-save');
+        const resetButton = document.getElementById('admin-reset');
+        const closeButton = document.getElementById('admin-close');
+
+        openButton.hidden = false;
+
+        noField.innerHTML = flights
+          .map((item) => `<option value="${item.no}">No.${item.no} ${escapeHtml(item.titles.ja)}</option>`)
+          .join('');
+
+        function applyForm(no) {
+          const item = flights.find((entry) => String(entry.no) === String(no));
+          const config = rowConfig(no);
+          speakerField.value = config.speakerJa || item.speaker.ja || '';
+          titleField.value = config.titleJa || item.titles.ja || '';
+          statusField.value = config.statusJa || item.statuses.ja || '';
+          colorField.value = config.color || '#ffd76b';
+          blinkField.checked = Boolean(config.blink);
+          note.textContent = '';
+        }
+
+        function openPanel() {
+          panel.hidden = false;
+          applyForm(noField.value || flights[0].no);
+        }
+
+        function closePanel() {
+          panel.hidden = true;
+        }
+
+        function saveCurrent() {
+          const no = String(noField.value);
+          const item = flights.find((entry) => String(entry.no) === no);
+          const next = {
+            speakerJa: speakerField.value.trim(),
+            titleJa: titleField.value.trim(),
+            statusJa: statusField.value.trim(),
+            color: colorField.value,
+            blink: blinkField.checked
+          };
+
+          const isDefault =
+            next.speakerJa === (item.speaker.ja || '') &&
+            next.titleJa === (item.titles.ja || '') &&
+            next.statusJa === (item.statuses.ja || '') &&
+            next.color === '#ffd76b' &&
+            next.blink === false;
+
+          if (isDefault) {
+            delete rowSettings[no];
+          } else {
+            rowSettings[no] = next;
+          }
+
+          saveRowSettings();
+          renderBoard();
+          updateStatus();
+          note.textContent = '保存しました';
+        }
+
+        function resetCurrent() {
+          const no = String(noField.value);
+          delete rowSettings[no];
+          saveRowSettings();
+          applyForm(no);
+          renderBoard();
+          updateStatus();
+          note.textContent = '初期化しました';
+        }
+
+        openButton.addEventListener('click', openPanel);
+        closeButton.addEventListener('click', closePanel);
+        noField.addEventListener('change', () => applyForm(noField.value));
+        saveButton.addEventListener('click', saveCurrent);
+        resetButton.addEventListener('click', resetCurrent);
       }
 
       function renderBoard() {
@@ -920,6 +1193,7 @@
       renderClock();
       renderBoard();
       updateStatus();
+      setupAdminPanel();
 
       setInterval(renderClock, 1000);
       setInterval(updateStatus, 15000);
