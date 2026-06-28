@@ -463,10 +463,19 @@
       }
 
       .footer-note {
-        font-size: 12px;
-        line-height: 1.25;
+        font-size: 15px;
+        line-height: 1.3;
         color: #edf2fb;
         min-height: 1.25em;
+        overflow: hidden;
+        max-width: min(60vw, 760px);
+      }
+
+      .footer-note-marquee {
+        display: inline-block;
+        white-space: nowrap;
+        padding-left: 100%;
+        animation: noteMarquee 22s linear infinite;
       }
 
       .notice-highlight {
@@ -699,6 +708,15 @@
         100% {
           transform: translateX(0);
           opacity: 1;
+        }
+      }
+
+      @keyframes noteMarquee {
+        0% {
+          transform: translateX(0);
+        }
+        100% {
+          transform: translateX(-100%);
         }
       }
 
@@ -1405,7 +1423,11 @@
         }
         const lang = currentLanguage().key;
         const base = lang === 'ja' ? footerNotice.ja : (footerNotice.en || footerNotice.ja || '');
-        noticeNode.innerHTML = renderNoticeHtml(base, footerNotice.highlight, footerNotice.blink);
+        if (!base) {
+          noticeNode.innerHTML = '';
+          return;
+        }
+        noticeNode.innerHTML = `<span class="footer-note-marquee">${renderNoticeHtml(base, footerNotice.highlight, footerNotice.blink)}</span>`;
       }
 
       function escapeHtml(value) {
@@ -1422,7 +1444,27 @@
       }
 
       function renderClock() {
-        clock.textContent = '14:08';
+        const now = new Date();
+        clock.textContent = now.toLocaleTimeString('ja-JP', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit'
+        });
+      }
+
+      function applyStateFromStorage(next) {
+        replaceRowSettings(next.rows || {});
+        replaceHiddenNos(next.hiddenNos || []);
+        replaceCustomRows(next.customRows || []);
+        globalDelayMinutes = Number.isFinite(next.delayMinutes) ? Number(next.delayMinutes) : 0;
+        footerNotice = next.notice || { ja: '', en: '', highlight: '', blink: '' };
+      }
+
+      function syncStateFromStorage() {
+        const latest = loadAdminState();
+        applyStateFromStorage(latest);
+        renderBoard();
+        updateStatus();
       }
 
       function currentLanguage() {
@@ -1948,6 +1990,12 @@
       renderBoard();
       updateStatus();
       setupAdminPanel();
+
+      window.addEventListener('storage', (event) => {
+        if (event.key === ADMIN_STORAGE_KEY) {
+          syncStateFromStorage();
+        }
+      });
 
       setInterval(renderClock, 1000);
       setInterval(updateStatus, 15000);
