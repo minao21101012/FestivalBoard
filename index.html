@@ -985,6 +985,8 @@
       };
 
       const ADMIN_STORAGE_KEY = 'festival-board-admin-v1';
+      const TRANSLATE_TARGETS = ['en', 'ko', 'th'];
+      const translationCache = {};
       const rowSettings = loadRowSettings();
       const historyStack = [cloneRowSettings(rowSettings)];
       let historyIndex = 0;
@@ -1049,6 +1051,57 @@
         return source[key] || source.ja || '';
       }
 
+      async function translateJaText(text, targetLanguage) {
+        const normalized = (text || '').trim();
+        if (!normalized) {
+          return '';
+        }
+
+        const cacheKey = `${targetLanguage}:${normalized}`;
+        if (translationCache[cacheKey]) {
+          return translationCache[cacheKey];
+        }
+
+        try {
+          const controller = new AbortController();
+          const timeout = window.setTimeout(() => controller.abort(), 5000);
+          const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=ja&tl=${targetLanguage}&dt=t&q=${encodeURIComponent(normalized)}`;
+          const response = await fetch(url, { signal: controller.signal });
+          window.clearTimeout(timeout);
+
+          if (!response.ok) {
+            throw new Error('translate failed');
+          }
+
+          const payload = await response.json();
+          const translated = (payload[0] || []).map((segment) => segment[0] || '').join('').trim();
+          const result = translated || normalized;
+          translationCache[cacheKey] = result;
+          return result;
+        } catch (error) {
+          return normalized;
+        }
+      }
+
+      async function buildAutoTranslations(jaText, existingMap, isSameAsBefore) {
+        const next = {};
+        if (isSameAsBefore && existingMap && typeof existingMap === 'object') {
+          TRANSLATE_TARGETS.forEach((language) => {
+            next[language] = existingMap[language] || jaText;
+          });
+          return next;
+        }
+
+        const translated = await Promise.all(
+          TRANSLATE_TARGETS.map(async (language) => [language, await translateJaText(jaText, language)])
+        );
+
+        translated.forEach(([language, text]) => {
+          next[language] = text;
+        });
+        return next;
+      }
+
       function renderHeaders() {
         const language = currentLanguage().key;
         const [airline, no, title, time, status, place] = headerLabels[language];
@@ -1064,15 +1117,15 @@
         const number = item.no ?? index + 1;
         const language = currentLanguage();
         const config = rowConfig(number);
-        const speaker = language.key === 'ja' && config.speakerJa
-          ? config.speakerJa
-          : getLocalizedText(item.speaker, language.key);
-        const title = language.key === 'ja' && config.titleJa
-          ? config.titleJa
-          : getLocalizedText(item.titles, language.key);
-        const statusText = language.key === 'ja' && config.statusJa
-          ? config.statusJa
-          : getLocalizedText(item.statuses, language.key);
+        const speaker = language.key === 'ja'
+          ? (config.speakerJa || getLocalizedText(item.speaker, language.key))
+          : ((config.speakerI18n && config.speakerI18n[language.key]) || getLocalizedText(item.speaker, language.key));
+        const title = language.key === 'ja'
+          ? (config.titleJa || getLocalizedText(item.titles, language.key))
+          : ((config.titleI18n && config.titleI18n[language.key]) || getLocalizedText(item.titles, language.key));
+        const statusText = language.key === 'ja'
+          ? (config.statusJa || getLocalizedText(item.statuses, language.key))
+          : ((config.statusI18n && config.statusI18n[language.key]) || getLocalizedText(item.statuses, language.key));
         const placeText = getLocalizedText(item.gates, language.key);
         const numberClass = 'no-cell';
         const rowClass = `row row-enter${config.color ? ' row-custom-accent' : ''}${config.blink ? ' row-custom-blink' : ''}`;
@@ -1152,13 +1205,45 @@
           panel.hidden = true;
         }
 
-        function saveCurrent() {
+        async function saveCurrent() {
           const no = String(noField.value);
           const item = flights.find((entry) => String(entry.no) === no);
+          const previous = rowConfig(no);
+          const speakerJa = speakerField.value.trim();
+          const titleJa = titleField.value.trim();
+          const statusJa = statusField.value.trim();
+
+          saveButton.disabled = true;
+          resetButton.disabled = true;
+          undoButton.disabled = true;
+          redoButton.disabled = true;
+          note.textContent = '翻訳中...';
+
+          const [speakerI18n, titleI18n, statusI18n] = await Promise.all([
+            buildAutoTranslations(
+              speakerJa,
+              previous.speakerI18n,
+              previous.speakerJa === speakerJa
+            ),
+            buildAutoTranslations(
+              titleJa,
+              previous.titleI18n,
+              previous.titleJa === titleJa
+            ),
+            buildAutoTranslations(
+              statusJa,
+              previous.statusI18n,
+              previous.statusJa === statusJa
+            )
+          ]);
+
           const next = {
-            speakerJa: speakerField.value.trim(),
-            titleJa: titleField.value.trim(),
-            statusJa: statusField.value.trim(),
+            speakerJa,
+            titleJa,
+            statusJa,
+            speakerI18n,
+            titleI18n,
+            statusI18n,
             color: colorField.value,
             blink: blinkField.checked
           };
@@ -1180,8 +1265,10 @@
           saveRowSettings();
           renderBoard();
           updateStatus();
+          saveButton.disabled = false;
+          resetButton.disabled = false;
           syncHistoryButtons();
-          note.textContent = '保存しました';
+          note.textContent = '保存しました（多言語を自動更新）';
         }
 
         function resetCurrent() {
@@ -1193,6 +1280,8 @@
           renderBoard();
           updateStatus();
           syncHistoryButtons();
+          saveButton.disabled = false;
+          resetButton.disabled = false;
           note.textContent = '初期化しました';
         }
 
