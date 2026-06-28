@@ -1234,7 +1234,6 @@
       let footerNotice = adminState.notice || { ja: '', en: '', highlight: '', blink: '' };
       let sharedStateVersion = Number(adminState.updatedAt || 0);
       let isApplyingSharedState = false;
-      let lastPublishError = '';
       const historyStack = [cloneAdminStateSnapshot()];
       let historyIndex = 0;
 
@@ -1296,14 +1295,12 @@
       async function publishSharedState() {
         const token = getSyncToken();
         if (!token) {
-          lastPublishError = 'トークン未設定です';
-          return false;
+          return { ok: false, reason: 'トークン未設定' };
         }
 
         const stateText = window.localStorage.getItem(ADMIN_STORAGE_KEY);
         if (!stateText) {
-          lastPublishError = '保存データが見つかりません';
-          return false;
+          return { ok: false, reason: '保存データなし' };
         }
 
         let sha;
@@ -1317,14 +1314,11 @@
           if (current.ok) {
             const payload = await current.json();
             sha = payload.sha;
-          } else if (current.status !== 404) {
-            const detail = await current.text();
-            lastPublishError = `事前確認エラー (${current.status}) ${detail.slice(0, 120)}`;
-            return false;
+          } else if (current.status === 401 || current.status === 403) {
+            return { ok: false, reason: `権限エラー(${current.status})` };
           }
         } catch (error) {
-          lastPublishError = 'GitHub APIへの接続に失敗しました';
-          return false;
+          return { ok: false, reason: 'API接続エラー(GET)' };
         }
 
         const body = {
@@ -1346,16 +1340,22 @@
             body: JSON.stringify(body)
           });
           if (!response.ok) {
-            const detail = await response.text();
-            lastPublishError = `公開更新エラー (${response.status}) ${detail.slice(0, 120)}`;
-            return false;
+            return { ok: false, reason: `書き込み失敗(${response.status})` };
           }
-          lastPublishError = '';
-          return true;
+          return { ok: true, reason: '' };
         } catch (error) {
-          lastPublishError = '公開更新に失敗しました（通信エラー）';
+          return { ok: false, reason: 'API接続エラー(PUT)' };
+        }
+      }
+
+      async function publishSharedStateWithNote(baseMessage) {
+        const result = await publishSharedState();
+        if (!result.ok) {
+          note.textContent = `${baseMessage} / 公開同期NG: ${result.reason}`;
           return false;
         }
+        note.textContent = `${baseMessage} / 公開同期OK`;
+        return true;
       }
 
       async function pullSharedState() {
@@ -1785,14 +1785,6 @@
           redoButton.disabled = historyIndex >= historyStack.length - 1;
         }
 
-        function publishSharedStateInBackground() {
-          publishSharedState().then((ok) => {
-            if (!ok && getSyncToken()) {
-              note.textContent = `公開同期に失敗しました: ${lastPublishError || 'トークン権限を確認してください'}`;
-            }
-          });
-        }
-
         function openPanel() {
           panel.hidden = false;
           refreshNoOptions(noField.value);
@@ -1872,7 +1864,7 @@
 
           pushHistorySnapshot();
           saveAdminState();
-          publishSharedStateInBackground();
+          await publishSharedStateWithNote('保存しました（多言語を自動更新）');
           renderBoard();
           updateStatus();
           saveButton.disabled = false;
@@ -1880,10 +1872,9 @@
           resetButton.disabled = false;
           refreshNoOptions(no);
           syncHistoryButtons();
-          note.textContent = '保存しました（多言語を自動更新）';
         }
 
-        function saveDelaySetting() {
+        async function saveDelaySetting() {
           const delay = Number(delayField.value || 0);
           if (!Number.isFinite(delay)) {
             note.textContent = '遅延/早発は数値で入力してください';
@@ -1893,17 +1884,16 @@
           globalDelayMinutes = Math.trunc(delay);
           pushHistorySnapshot();
           saveAdminState();
-          publishSharedStateInBackground();
           renderBoard();
           updateStatus();
           syncHistoryButtons();
 
           if (globalDelayMinutes === 0) {
-            note.textContent = '遅延設定を0分に戻しました';
+            await publishSharedStateWithNote('遅延設定を0分に戻しました');
           } else if (globalDelayMinutes > 0) {
-            note.textContent = `${globalDelayMinutes}分の遅延を反映しました`;
+            await publishSharedStateWithNote(`${globalDelayMinutes}分の遅延を反映しました`);
           } else {
-            note.textContent = `${Math.abs(globalDelayMinutes)}分の早発を反映しました`;
+            await publishSharedStateWithNote(`${Math.abs(globalDelayMinutes)}分の早発を反映しました`);
           }
         }
 
@@ -1925,31 +1915,29 @@
 
           pushHistorySnapshot();
           saveAdminState();
-          publishSharedStateInBackground();
+          await publishSharedStateWithNote('注意事項を保存しました（JP/EN）');
           updateFooterNotice();
           updateStatus();
           syncHistoryButtons();
 
           noticeSaveButton.disabled = false;
-          note.textContent = '注意事項を保存しました（JP/EN）';
         }
 
-        function resetCurrent() {
+        async function resetCurrent() {
           const no = String(noField.value);
           delete rowSettings[no];
           pushHistorySnapshot();
           saveAdminState();
-          publishSharedStateInBackground();
+          await publishSharedStateWithNote('初期化しました');
           applyForm(no);
           renderBoard();
           updateStatus();
           syncHistoryButtons();
           saveButton.disabled = false;
           resetButton.disabled = false;
-          note.textContent = '初期化しました';
         }
 
-        function deleteCurrent() {
+        async function deleteCurrent() {
           const no = String(noField.value);
           const numericNo = Number(no);
           if (!no) {
@@ -1967,7 +1955,7 @@
 
           pushHistorySnapshot();
           saveAdminState();
-          publishSharedStateInBackground();
+          await publishSharedStateWithNote(note.textContent);
           renderBoard();
           updateStatus();
           refreshNoOptions(no);
@@ -2023,7 +2011,7 @@
 
           pushHistorySnapshot();
           saveAdminState();
-          publishSharedStateInBackground();
+          await publishSharedStateWithNote(`No.${no} を追加しました`);
           renderBoard();
           updateStatus();
           refreshNoOptions(no);
@@ -2037,10 +2025,9 @@
           addPlaceField.value = '体育館';
           addNoField.value = '';
           addButton.disabled = false;
-          note.textContent = `No.${no} を追加しました`;
         }
 
-        function undoCurrent() {
+        async function undoCurrent() {
           if (historyIndex <= 0) {
             note.textContent = 'これ以上戻せません';
             return;
@@ -2049,16 +2036,15 @@
           historyIndex -= 1;
           restoreAdminStateSnapshot(historyStack[historyIndex]);
           saveAdminState();
-          publishSharedStateInBackground();
+          await publishSharedStateWithNote('1つ前の状態に戻しました');
           refreshNoOptions(noField.value);
           applyForm(noField.value);
           renderBoard();
           updateStatus();
           syncHistoryButtons();
-          note.textContent = '1つ前の状態に戻しました';
         }
 
-        function redoCurrent() {
+        async function redoCurrent() {
           if (historyIndex >= historyStack.length - 1) {
             note.textContent = 'これ以上やり直せません';
             return;
@@ -2067,13 +2053,12 @@
           historyIndex += 1;
           restoreAdminStateSnapshot(historyStack[historyIndex]);
           saveAdminState();
-          publishSharedStateInBackground();
+          await publishSharedStateWithNote('戻した操作をやり直しました');
           refreshNoOptions(noField.value);
           applyForm(noField.value);
           renderBoard();
           updateStatus();
           syncHistoryButtons();
-          note.textContent = '戻した操作をやり直しました';
         }
 
         async function configureSyncToken() {
@@ -2085,10 +2070,7 @@
           const token = input.trim();
           if (token) {
             window.localStorage.setItem(SYNC_TOKEN_KEY, token);
-            const ok = await publishSharedState();
-            note.textContent = ok
-              ? '公開同期トークンを保存しました（接続確認OK）'
-              : `トークン保存後の接続確認に失敗しました: ${lastPublishError || '権限を確認してください'}`;
+            await publishSharedStateWithNote('公開同期トークンを保存しました');
           } else {
             window.localStorage.removeItem(SYNC_TOKEN_KEY);
             note.textContent = '公開同期トークンを削除しました';
@@ -2148,13 +2130,13 @@
         }
       });
 
-      window.addEventListener('visibilitychange', () => {
-        if (!document.hidden) {
+      // iPad/Safari: foreground復帰時に即同期して遅延を最小化する。
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
           pullSharedState();
         }
       });
-
-      window.addEventListener('pageshow', () => {
+      window.addEventListener('focus', () => {
         pullSharedState();
       });
 
