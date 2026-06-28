@@ -362,10 +362,28 @@
 
       .time-cell {
         justify-content: center;
+        flex-direction: column;
+        align-items: center;
         font-size: 18px;
         font-weight: 600;
         font-variant-numeric: tabular-nums;
         letter-spacing: 0.05em;
+      }
+
+      .time-main {
+        line-height: 1;
+      }
+
+      .time-delta {
+        margin-top: 3px;
+        font-size: 10px;
+        letter-spacing: 0.08em;
+        color: #ffd76b;
+      }
+
+      .time-cell.time-shifted {
+        color: #ffdf82;
+        animation: delayGlow 1.5s ease-in-out infinite;
       }
 
       .status-cell {
@@ -456,7 +474,9 @@
         right: 16px;
         bottom: 60px;
         z-index: 21;
-        width: min(360px, calc(100vw - 24px));
+        width: min(980px, calc(100vw - 24px));
+        max-height: calc(100vh - 86px);
+        overflow: auto;
         border: 1px solid rgba(255, 255, 255, 0.2);
         background: rgba(13, 19, 27, 0.94);
         border-radius: 12px;
@@ -473,7 +493,12 @@
 
       .admin-grid {
         display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 8px;
+      }
+
+      .admin-span-2 {
+        grid-column: 1 / span 2;
       }
 
       .admin-grid label {
@@ -502,7 +527,7 @@
       }
 
       .admin-actions button {
-        flex: 1 1 calc(50% - 4px);
+        flex: 1 1 calc(33.333% - 6px);
         border: 1px solid rgba(255, 255, 255, 0.2);
         background: rgba(255, 255, 255, 0.06);
         color: #eef4ff;
@@ -591,7 +616,36 @@
         }
       }
 
+      @keyframes delayGlow {
+        0%,
+        100% {
+          text-shadow: 0 0 0 rgba(255, 212, 97, 0);
+          transform: translateX(0);
+        }
+        50% {
+          text-shadow: 0 0 10px rgba(255, 212, 97, 0.6);
+          transform: translateX(2px);
+        }
+      }
+
       @media (max-width: 860px) {
+        .admin-panel {
+          width: min(520px, calc(100vw - 24px));
+          max-height: calc(100vh - 72px);
+        }
+
+        .admin-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .admin-span-2 {
+          grid-column: auto;
+        }
+
+        .admin-actions button {
+          flex: 1 1 calc(50% - 4px);
+        }
+
         .monitor {
           padding: 8px;
         }
@@ -700,16 +754,21 @@
           <input id="admin-status" type="text" />
         </label>
         <label>
+          全体遅延/早発（分）
+          <input id="admin-delay-minutes" type="number" step="1" value="0" />
+        </label>
+        <label>
           文字色
           <input id="admin-color" type="color" value="#ffd76b" />
         </label>
-        <label>
+        <label class="admin-span-2">
           <input id="admin-blink" type="checkbox" />
           点滅させる
         </label>
       </div>
       <div class="admin-actions">
         <button id="admin-save" type="button">保存</button>
+        <button id="admin-delay-save" type="button">遅延設定を反映</button>
         <button id="admin-reset" type="button">行を初期化</button>
         <button id="admin-delete" type="button">行を削除</button>
         <button id="admin-undo" type="button">一つ戻す</button>
@@ -719,6 +778,10 @@
       <div class="admin-sep">
         <div class="admin-subtitle">案内を追加</div>
         <div class="admin-grid">
+          <label>
+            No.（任意）
+            <input id="admin-add-no" type="number" min="1" placeholder="空欄なら自動採番" />
+          </label>
           <label>
             公演者（日本語）
             <input id="admin-add-speaker" type="text" placeholder="例: 軽音楽部" />
@@ -1045,6 +1108,7 @@
       const rowSettings = adminState.rows;
       const hiddenNos = new Set(adminState.hiddenNos || []);
       const customRows = Array.isArray(adminState.customRows) ? adminState.customRows : [];
+      let globalDelayMinutes = Number.isFinite(adminState.delayMinutes) ? Number(adminState.delayMinutes) : 0;
       const historyStack = [cloneAdminStateSnapshot()];
       let historyIndex = 0;
 
@@ -1052,15 +1116,16 @@
         try {
           const raw = window.localStorage.getItem(ADMIN_STORAGE_KEY);
           if (!raw) {
-            return { rows: {}, hiddenNos: [], customRows: [] };
+            return { rows: {}, hiddenNos: [], customRows: [], delayMinutes: 0 };
           }
           const parsed = JSON.parse(raw);
           const rows = parsed.rows && typeof parsed.rows === 'object' ? parsed.rows : {};
           const nextHidden = Array.isArray(parsed.hiddenNos) ? parsed.hiddenNos : [];
           const nextCustomRows = Array.isArray(parsed.customRows) ? parsed.customRows : [];
-          return { rows, hiddenNos: nextHidden, customRows: nextCustomRows };
+          const delayMinutes = Number.isFinite(parsed.delayMinutes) ? Number(parsed.delayMinutes) : 0;
+          return { rows, hiddenNos: nextHidden, customRows: nextCustomRows, delayMinutes };
         } catch (error) {
-          return { rows: {}, hiddenNos: [], customRows: [] };
+          return { rows: {}, hiddenNos: [], customRows: [], delayMinutes: 0 };
         }
       }
 
@@ -1070,7 +1135,8 @@
           JSON.stringify({
             rows: rowSettings,
             hiddenNos: Array.from(hiddenNos),
-            customRows
+            customRows,
+            delayMinutes: globalDelayMinutes
           })
         );
       }
@@ -1083,7 +1149,8 @@
         return {
           rows: cloneRowSettings(rowSettings),
           hiddenNos: Array.from(hiddenNos),
-          customRows: cloneRowSettings(customRows)
+          customRows: cloneRowSettings(customRows),
+          delayMinutes: globalDelayMinutes
         };
       }
 
@@ -1107,6 +1174,7 @@
         replaceRowSettings(snapshot.rows || {});
         replaceHiddenNos(snapshot.hiddenNos || []);
         replaceCustomRows(snapshot.customRows || []);
+        globalDelayMinutes = Number.isFinite(snapshot.delayMinutes) ? Number(snapshot.delayMinutes) : 0;
       }
 
       function pushHistorySnapshot() {
@@ -1118,7 +1186,14 @@
 
       function getDisplayFlights() {
         const rows = [...flights, ...customRows].filter((item) => !hiddenNos.has(item.no));
-        rows.sort((a, b) => (a.no || 0) - (b.no || 0));
+        rows.sort((a, b) => {
+          const ta = parseClockToMinutes(a.time);
+          const tb = parseClockToMinutes(b.time);
+          if (ta !== tb) {
+            return ta - tb;
+          }
+          return (a.no || 0) - (b.no || 0);
+        });
         return rows;
       }
 
@@ -1136,6 +1211,45 @@
         const maxBase = flights.reduce((max, item) => Math.max(max, item.no || 0), 0);
         const maxCustom = customRows.reduce((max, item) => Math.max(max, item.no || 0), 0);
         return Math.max(maxBase, maxCustom) + 1;
+      }
+
+      function parseClockToMinutes(value) {
+        const text = String(value || '').trim();
+        const match = text.match(/^(\d{1,2}):(\d{2})$/);
+        if (!match) {
+          return Number.POSITIVE_INFINITY;
+        }
+
+        const hours = Number(match[1]);
+        const minutes = Number(match[2]);
+        if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+          return Number.POSITIVE_INFINITY;
+        }
+        return hours * 60 + minutes;
+      }
+
+      function formatMinutesToClock(totalMinutes) {
+        const day = 24 * 60;
+        const wrapped = ((totalMinutes % day) + day) % day;
+        const hours = Math.floor(wrapped / 60);
+        const minutes = wrapped % 60;
+        return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+      }
+
+      function applyDelayToTime(baseTime) {
+        const minutes = parseClockToMinutes(baseTime);
+        if (!Number.isFinite(minutes)) {
+          return baseTime;
+        }
+        return formatMinutesToClock(minutes + globalDelayMinutes);
+      }
+
+      function delayLabel() {
+        if (!globalDelayMinutes) {
+          return '';
+        }
+        const sign = globalDelayMinutes > 0 ? '+' : '';
+        return `${sign}${globalDelayMinutes}m`;
       }
 
       function escapeHtml(value) {
@@ -1239,6 +1353,9 @@
           ? (config.statusJa || getLocalizedText(item.statuses, language.key))
           : ((config.statusI18n && config.statusI18n[language.key]) || getLocalizedText(item.statuses, language.key));
         const placeText = getLocalizedText(item.gates, language.key);
+        const shiftedTime = applyDelayToTime(item.time);
+        const shiftedClass = globalDelayMinutes !== 0 ? ' time-shifted' : '';
+        const delta = delayLabel();
         const numberClass = 'no-cell';
         const rowClass = `row row-enter${config.color ? ' row-custom-accent' : ''}${config.blink ? ' row-custom-blink' : ''}`;
         const rowStyle = `animation-delay:${index * 40}ms;${config.color ? `--row-accent:${config.color};` : ''}`;
@@ -1252,7 +1369,10 @@
               <div class="event-title">${escapeHtml(title)}</div>
               <span class="lang-chip">${language.label}</span>
             </div>
-            <div class="time-cell">${item.time}</div>
+            <div class="time-cell${shiftedClass}">
+              <span class="time-main">${escapeHtml(shiftedTime)}</span>
+              ${delta ? `<span class="time-delta">${escapeHtml(delta)}</span>` : ''}
+            </div>
             <div class="status-cell ${statusClass[item.status] || ''}">
               <span class="status-static">
                 <span class="status-text">${escapeHtml(statusText)}</span>
@@ -1279,13 +1399,16 @@
         const statusField = document.getElementById('admin-status');
         const colorField = document.getElementById('admin-color');
         const blinkField = document.getElementById('admin-blink');
+        const delayField = document.getElementById('admin-delay-minutes');
         const note = document.getElementById('admin-note');
         const saveButton = document.getElementById('admin-save');
+        const delaySaveButton = document.getElementById('admin-delay-save');
         const resetButton = document.getElementById('admin-reset');
         const deleteButton = document.getElementById('admin-delete');
         const undoButton = document.getElementById('admin-undo');
         const redoButton = document.getElementById('admin-redo');
         const closeButton = document.getElementById('admin-close');
+        const addNoField = document.getElementById('admin-add-no');
         const addSpeakerField = document.getElementById('admin-add-speaker');
         const addTitleField = document.getElementById('admin-add-title');
         const addStatusField = document.getElementById('admin-add-status');
@@ -1331,6 +1454,7 @@
           speakerField.value = config.speakerJa || item.speaker.ja || '';
           titleField.value = config.titleJa || item.titles.ja || '';
           statusField.value = config.statusJa || item.statuses.ja || '';
+          delayField.value = String(globalDelayMinutes);
           colorField.value = config.color || '#ffd76b';
           blinkField.checked = Boolean(config.blink);
           deleteButton.textContent = hiddenNos.has(item.no) ? '行を復元' : '行を削除';
@@ -1365,6 +1489,7 @@
           const statusJa = statusField.value.trim();
 
           saveButton.disabled = true;
+          delaySaveButton.disabled = true;
           resetButton.disabled = true;
           undoButton.disabled = true;
           redoButton.disabled = true;
@@ -1417,10 +1542,34 @@
           renderBoard();
           updateStatus();
           saveButton.disabled = false;
+          delaySaveButton.disabled = false;
           resetButton.disabled = false;
           refreshNoOptions(no);
           syncHistoryButtons();
           note.textContent = '保存しました（多言語を自動更新）';
+        }
+
+        function saveDelaySetting() {
+          const delay = Number(delayField.value || 0);
+          if (!Number.isFinite(delay)) {
+            note.textContent = '遅延/早発は数値で入力してください';
+            return;
+          }
+
+          globalDelayMinutes = Math.trunc(delay);
+          pushHistorySnapshot();
+          saveAdminState();
+          renderBoard();
+          updateStatus();
+          syncHistoryButtons();
+
+          if (globalDelayMinutes === 0) {
+            note.textContent = '遅延設定を0分に戻しました';
+          } else if (globalDelayMinutes > 0) {
+            note.textContent = `${globalDelayMinutes}分の遅延を反映しました`;
+          } else {
+            note.textContent = `${Math.abs(globalDelayMinutes)}分の早発を反映しました`;
+          }
         }
 
         function resetCurrent() {
@@ -1463,6 +1612,7 @@
         }
 
         async function addNewRow() {
+          const requestedNo = Number(addNoField.value);
           const speakerJa = addSpeakerField.value.trim();
           const titleJa = addTitleField.value.trim();
           const statusJa = addStatusField.value.trim() || '開演前';
@@ -1485,7 +1635,18 @@
             buildAutoTranslations(placeJa)
           ]);
 
-          const no = nextRowNo();
+          let no = nextRowNo();
+          if (Number.isFinite(requestedNo) && requestedNo > 0) {
+            const normalizedNo = Math.trunc(requestedNo);
+            const alreadyUsed = getAllAdminFlights().some((entry) => Number(entry.no) === normalizedNo);
+            if (alreadyUsed) {
+              addButton.disabled = false;
+              note.textContent = `No.${normalizedNo} は既に使われています`;
+              return;
+            }
+            no = normalizedNo;
+          }
+
           customRows.push({
             no,
             speaker: { ja: speakerJa, ...speakerI18n },
@@ -1510,6 +1671,7 @@
           addTimeField.value = '--:--';
           addPlaceField.value = '体育館';
           addStatusCodeField.value = 'checkin';
+          addNoField.value = '';
           addButton.disabled = false;
           note.textContent = `No.${no} を追加しました`;
         }
@@ -1552,6 +1714,7 @@
         closeButton.addEventListener('click', closePanel);
         noField.addEventListener('change', () => applyForm(noField.value));
         saveButton.addEventListener('click', saveCurrent);
+        delaySaveButton.addEventListener('click', saveDelaySetting);
         resetButton.addEventListener('click', resetCurrent);
         deleteButton.addEventListener('click', deleteCurrent);
         addButton.addEventListener('click', addNewRow);
@@ -1570,7 +1733,10 @@
 
       function updateStatus() {
         const stamp = new Date();
-        lastUpdate.textContent = `更新 ${stamp.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })} / ${currentLanguage().label}`;
+        const delayText = globalDelayMinutes === 0
+          ? ''
+          : (globalDelayMinutes > 0 ? ` / 遅延 +${globalDelayMinutes}分` : ` / 早発 ${Math.abs(globalDelayMinutes)}分`);
+        lastUpdate.textContent = `更新 ${stamp.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })} / ${currentLanguage().label}${delayText}`;
       }
 
       function advanceLanguage() {
