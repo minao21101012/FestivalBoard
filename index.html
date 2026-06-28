@@ -1185,6 +1185,13 @@
 
       const languages = [
         { key: 'ja', label: 'JP' },
+        { key: 'en', label: 'EN' },
+        { key: 'ko', label: 'KR' },
+        { key: 'th', label: 'TH' }
+      ];
+
+      const noticeLanguages = [
+        { key: 'ja', label: 'JP' },
         { key: 'en', label: 'EN' }
       ];
 
@@ -1216,7 +1223,9 @@
       const headStatus = document.getElementById('head-status');
       const headPlace = document.getElementById('head-place');
       let currentLanguageIndex = 0;
+      let currentNoticeLanguageIndex = 0;
       let languageTimer = null;
+      let noticeLanguageTimer = null;
 
       const headerLabels = {
         ja: ['公演者', '番号', '開演名', '時刻', '状態', '場所'],
@@ -1541,12 +1550,16 @@
         return html;
       }
 
+      function currentNoticeLanguage() {
+        return noticeLanguages[currentNoticeLanguageIndex % noticeLanguages.length];
+      }
+
       function updateFooterNotice() {
         const noticeNode = document.getElementById('custom-note');
         if (!noticeNode) {
           return;
         }
-        const lang = currentLanguage().key;
+        const lang = currentNoticeLanguage().key;
         const base = lang === 'ja' ? footerNotice.ja : (footerNotice.en || footerNotice.ja || '');
         if (!base) {
           noticeNode.innerHTML = '';
@@ -2138,6 +2151,14 @@
         languageTimer = window.setTimeout(advanceLanguage, duration);
       }
 
+      function advanceNoticeLanguage() {
+        currentNoticeLanguageIndex = (currentNoticeLanguageIndex + 1) % noticeLanguages.length;
+        updateFooterNotice();
+
+        const duration = currentNoticeLanguage().key === 'ja' ? 10000 : 5000;
+        noticeLanguageTimer = window.setTimeout(advanceNoticeLanguage, duration);
+      }
+
       renderClock();
       renderBoard();
       updateStatus();
@@ -2164,6 +2185,7 @@
       setInterval(updateStatus, 15000);
       setInterval(pullSharedState, 8000);
       languageTimer = window.setTimeout(advanceLanguage, 10000);
+      noticeLanguageTimer = window.setTimeout(advanceNoticeLanguage, 10000);
     </script>
   </body>
 </html>
