@@ -1,0 +1,929 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>文化祭案内</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --frame: #12151a;
+        --frame-2: #1a1f26;
+        --panel: #2a3340;
+        --panel-2: #344152;
+        --line: rgba(255, 255, 255, 0.08);
+        --line-strong: rgba(255, 255, 255, 0.12);
+        --text: #eef4ff;
+        --muted: #b5bfd0;
+        --blue: #5fa6ff;
+        --green: #88dc4f;
+        --amber: #ffd76b;
+        --pink: #f4a0cf;
+        --shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background:
+          radial-gradient(circle at 20% 20%, rgba(84, 126, 182, 0.18), transparent 28%),
+          radial-gradient(circle at 80% 10%, rgba(255, 255, 255, 0.06), transparent 20%),
+          linear-gradient(180deg, #bfc4ca 0%, #8d9399 28%, #7a8086 100%);
+        font-family: "Avenir Next Condensed", "DIN Condensed", "Yu Gothic", "Hiragino Sans", system-ui, sans-serif;
+        color: var(--text);
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background:
+          linear-gradient(115deg, rgba(255, 255, 255, 0.15), transparent 22%, transparent 78%, rgba(0, 0, 0, 0.1)),
+          linear-gradient(transparent, rgba(255, 255, 255, 0.03));
+        mix-blend-mode: screen;
+        opacity: 0.35;
+      }
+
+      .scene {
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+      }
+
+      .monitor {
+        width: min(920px, 100%);
+        background: linear-gradient(180deg, var(--frame), #090b0f 100%);
+        border-radius: 6px;
+        box-shadow: var(--shadow);
+        padding: 10px;
+        position: relative;
+      }
+
+      .monitor::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: 6px;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+        pointer-events: none;
+      }
+
+      .screen {
+        overflow: hidden;
+        border-radius: 2px;
+        background: linear-gradient(180deg, #252c37 0%, #20262f 100%);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .header {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: center;
+        gap: 16px;
+        padding: 10px 12px 8px;
+        background: linear-gradient(180deg, #171b21 0%, #0f1216 100%);
+        border-bottom: 2px solid #36404c;
+      }
+
+      .header-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+      }
+
+      .icon {
+        width: 22px;
+        height: 22px;
+        border-radius: 3px;
+        background: linear-gradient(180deg, #7cf35f 0%, #43b73f 100%);
+        position: relative;
+        flex: 0 0 auto;
+        box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+      }
+
+      .icon::before {
+        content: "";
+        position: absolute;
+        left: 5px;
+        top: 7px;
+        width: 11px;
+        height: 7px;
+        border-top: 3px solid #0b2e12;
+        border-left: 3px solid #0b2e12;
+        transform: rotate(-45deg);
+      }
+
+      .title-wrap {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        min-width: 0;
+        white-space: nowrap;
+      }
+
+      .title-ja {
+        font-size: clamp(18px, 2.8vw, 29px);
+        font-weight: 800;
+        letter-spacing: 0.08em;
+      }
+
+      .title-en {
+        color: #d0d7e2;
+        font-size: clamp(12px, 1.8vw, 19px);
+        font-weight: 700;
+        letter-spacing: 0.05em;
+      }
+
+      .clock {
+        min-width: 92px;
+        padding: 6px 12px 5px;
+        border-radius: 2px;
+        background: linear-gradient(180deg, #25437a 0%, #172d57 100%);
+        border: 1px solid rgba(128, 187, 255, 0.2);
+        color: #6fb3ff;
+        font-size: clamp(22px, 3.2vw, 30px);
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-align: center;
+        font-variant-numeric: tabular-nums;
+        text-shadow: 0 0 10px rgba(105, 176, 255, 0.2);
+      }
+
+      .board {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .table-head,
+      .row {
+        display: grid;
+        grid-template-columns: 0.95fr 0.32fr 2.15fr 0.72fr 1.02fr 1.15fr;
+        align-items: center;
+        column-gap: 10px;
+      }
+
+      .table-head {
+        padding: 6px 10px 5px;
+        background: linear-gradient(180deg, #303846 0%, #262d38 100%);
+        border-bottom: 1px solid var(--line-strong);
+        color: #c9d3e2;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+      }
+
+      .table-head .head-dest {
+        text-transform: none;
+        letter-spacing: 0.08em;
+      }
+
+      .table-head .head-no {
+        text-align: left;
+      }
+
+      .rows {
+        background: linear-gradient(180deg, #2a3140 0%, #262d3a 100%);
+      }
+
+      .row {
+        min-height: 42px;
+        padding: 0 10px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.015), rgba(0, 0, 0, 0.04));
+      }
+
+      .row:nth-child(2n) {
+        background: rgba(255, 255, 255, 0.02);
+      }
+
+      .row:nth-child(2n + 1) .gate-cell,
+      .row:nth-child(2n + 1) .status-cell {
+        background: rgba(255, 255, 255, 0.015);
+      }
+
+      .row > div {
+        display: flex;
+        align-items: center;
+        min-width: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-weight: 600;
+      }
+
+      .airline-cell {
+        gap: 8px;
+      }
+
+      .airline-badge {
+        width: auto;
+        min-width: 96px;
+        padding: 0 8px;
+        height: 22px;
+        display: grid;
+        place-items: center;
+        border-radius: 2px;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.03em;
+        text-transform: none;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+        color: #ffffff;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .airline-ana {
+        background: linear-gradient(180deg, #fff 0%, #dfefff 100%);
+        color: #1b57a8;
+      }
+
+      .airline-jal {
+        background: linear-gradient(180deg, #ffffff 0%, #f0f0f0 100%);
+        color: #c73b39;
+      }
+
+      .airline-fda {
+        background: linear-gradient(180deg, #f4e58b 0%, #e5d44f 100%);
+        color: #8f7500;
+      }
+
+      .airline-peach {
+        background: linear-gradient(180deg, #ffbfd5 0%, #ff9fc1 100%);
+        color: #b72d6d;
+      }
+
+      .airline-sky {
+        background: linear-gradient(180deg, #f6fbff 0%, #d9edf8 100%);
+        color: #3177b7;
+      }
+
+      .no-cell {
+        justify-content: flex-start;
+        padding-left: 2px;
+        font-size: 18px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+      }
+
+      .event-cell {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+        min-width: 0;
+      }
+
+      .event-title {
+        width: 100%;
+        font-size: 17px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .lang-chip {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.08);
+        color: #d7dfeb;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.12em;
+      }
+
+      .event-sub {
+        color: #c9d3e1;
+        font-size: 11px;
+        letter-spacing: 0.08em;
+      }
+
+      .status-static {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .gate-cell,
+      .status-cell {
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1.1;
+        text-align: center;
+        white-space: normal;
+      }
+
+      .gate-number {
+        font-size: 14px;
+        font-weight: 600;
+        letter-spacing: 0;
+        line-height: 1.05;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100%;
+      }
+
+      .status-label {
+        margin-top: 1px;
+        color: #acb7c7;
+        font-size: 10px;
+        letter-spacing: 0.08em;
+      }
+
+      .time-cell {
+        justify-content: center;
+        font-size: 18px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 0.05em;
+      }
+
+      .status-cell {
+        flex-direction: column;
+        align-items: flex-start;
+        justify-content: center;
+        padding: 4px 0 4px 8px;
+      }
+
+      .status-text {
+        font-size: 14px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        color: #ffffff;
+        line-height: 1.2;
+      }
+
+      .status-sub {
+        color: #d2d8e3;
+        font-size: 10px;
+        letter-spacing: 0.08em;
+        margin-top: 2px;
+        line-height: 1.1;
+      }
+
+      .status-boarding .status-text,
+      .status-checkin .status-text,
+      .status-delayed .status-text,
+      .status-lastcall .status-text,
+      .status-departed .status-text,
+      .status-cancel .status-text {
+        color: #ffffff;
+      }
+
+      .footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 12px 10px;
+        background: linear-gradient(180deg, #252b35 0%, #1f252e 100%);
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        color: #d2d9e4;
+        font-size: 12px;
+      }
+
+      .footer-right {
+        color: #e7edf7;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+      }
+
+      .divider {
+        height: 14px;
+        background: #232934;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      }
+
+      .sheet-title {
+        position: absolute;
+        right: 14px;
+        bottom: 12px;
+        color: #f1f5fb;
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        opacity: 0.9;
+      }
+
+      .blink {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .blink::before {
+        content: "";
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: #8af55c;
+        box-shadow: 0 0 0 0 rgba(138, 245, 92, 0.55);
+        animation: pulse 1.8s infinite;
+      }
+
+      .row-enter {
+        animation: enter 0.5s ease both;
+      }
+
+      @keyframes pulse {
+        0% {
+          transform: scale(0.88);
+          box-shadow: 0 0 0 0 rgba(138, 245, 92, 0.55);
+        }
+        70% {
+          transform: scale(1);
+          box-shadow: 0 0 0 12px rgba(138, 245, 92, 0);
+        }
+        100% {
+          transform: scale(0.88);
+          box-shadow: 0 0 0 0 rgba(138, 245, 92, 0);
+        }
+      }
+
+      @keyframes enter {
+        from {
+          opacity: 0;
+          transform: translateY(8px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @keyframes numberBlink {
+        0%,
+        49% {
+          opacity: 1;
+        }
+        50%,
+        100% {
+          opacity: 0.35;
+        }
+      }
+
+      @media (max-width: 860px) {
+        .monitor {
+          padding: 8px;
+        }
+
+        .header {
+          grid-template-columns: 1fr;
+          justify-items: start;
+        }
+
+        .table-head {
+          display: none;
+        }
+
+        .row {
+          grid-template-columns: 1fr 1fr;
+          padding: 10px 10px 8px;
+          row-gap: 4px;
+        }
+
+        .airline-cell {
+          grid-column: 1 / span 2;
+        }
+
+        .no-cell,
+        .gate-cell,
+        .time-cell,
+        .status-cell {
+          justify-content: flex-start;
+        }
+
+          line-height: 1.15;
+          grid-column: 1 / span 2;
+        }
+
+        .footer {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="scene">
+      <section class="monitor" aria-label="空港の出発案内モニタ">
+        <div class="screen">
+          <div class="header">
+            <div class="header-left">
+              <span class="icon" aria-hidden="true"></span>
+              <div class="title-wrap">
+                <div class="title-ja">プログラム案内</div>
+                <div class="title-en">Program Guide</div>
+              </div>
+            </div>
+            <div class="clock" id="clock">14:08</div>
+          </div>
+
+          <div class="board" aria-describedby="board-note">
+            <div class="table-head" role="presentation">
+              <div id="head-airline">Airline</div>
+              <div class="head-no" id="head-no">No.</div>
+              <div class="head-dest" id="head-title">開演名</div>
+              <div id="head-time">Time</div>
+              <div id="head-status">Status</div>
+              <div id="head-place">Place</div>
+            </div>
+
+            <div class="rows" id="rows"></div>
+
+            <div class="divider" aria-hidden="true"></div>
+
+            <div class="rows" id="rows-2"></div>
+          </div>
+
+          <div class="footer" id="board-note">
+            <div class="blink">文化祭の案内は変更される場合があります</div>
+            <div class="footer-right" id="last-update">最新情報を表示中</div>
+          </div>
+        </div>
+        <div class="sheet-title">FESTIVAL</div>
+      </section>
+    </main>
+
+    <script>
+      const flights = [
+        {
+          no: 1,
+          speaker: {
+            ja: '生徒会',
+            en: 'Student Council',
+            ko: '학생회',
+            th: 'สภานักเรียน'
+          },
+          time: '9:00',
+          status: 'checkin',
+          gates: {
+            ja: '体育館',
+            en: 'Gymnasium',
+            ko: '체육관',
+            th: 'โรงยิม'
+          },
+          titles: {
+            ja: '開会式',
+            en: 'Opening Ceremony',
+            ko: '개회식',
+            th: 'พิธีเปิดงาน'
+          },
+          statuses: {
+            ja: '開演前',
+            en: 'Before Show',
+            ko: '공연 전',
+            th: 'ก่อนเริ่มการแสดง'
+          }
+        },
+        {
+          no: 2,
+          speaker: {
+            ja: '生徒会',
+            en: 'Student Council',
+            ko: '학생회',
+            th: 'สภานักเรียน'
+          },
+          time: '9:05',
+          status: 'boarding',
+          gates: {
+            ja: '体育館',
+            en: 'Gymnasium',
+            ko: '체육관',
+            th: 'โรงยิม'
+          },
+          titles: {
+            ja: '開会オープニング',
+            en: 'Opening Performance',
+            ko: '오프닝 공연',
+            th: 'การแสดงเปิดงาน'
+          },
+          statuses: {
+            ja: '開演前',
+            en: 'Before Show',
+            ko: '공연 전',
+            th: 'ก่อนเริ่มการแสดง'
+          }
+        },
+        {
+          no: 3,
+          speaker: {
+            ja: '書道部',
+            en: 'Calligraphy Club',
+            ko: '서예부',
+            th: 'ชมรมคัดลายมือ'
+          },
+          time: '9:10',
+          status: 'checkin',
+          gates: {
+            ja: '体育館',
+            en: 'Gymnasium',
+            ko: '체육관',
+            th: 'โรงยิม'
+          },
+          titles: {
+            ja: '書道部パフォーマンス１',
+            en: 'Calligraphy Performance 1',
+            ko: '서예부 퍼포먼스 1',
+            th: 'การแสดงพู่กันครั้งที่ 1'
+          },
+          statuses: {
+            ja: '開演前',
+            en: 'Before Show',
+            ko: '공연 전',
+            th: 'ก่อนเริ่มการแสดง'
+          }
+        },
+        {
+          no: 4,
+          speaker: {
+            ja: '書道部',
+            en: 'Calligraphy Club',
+            ko: '서예부',
+            th: 'ชมรมคัดลายมือ'
+          },
+          time: '9:20',
+          status: 'checkin',
+          gates: {
+            ja: '体育館',
+            en: 'Gymnasium',
+            ko: '체육관',
+            th: 'โรงยิม'
+          },
+          titles: {
+            ja: '書道部パフォーマンス２',
+            en: 'Calligraphy Performance 2',
+            ko: '서예부 퍼포먼스 2',
+            th: 'การแสดงพู่กันครั้งที่ 2'
+          },
+          statuses: {
+            ja: '開演前',
+            en: 'Before Show',
+            ko: '공연 전',
+            th: 'ก่อนเริ่มการแสดง'
+          }
+        },
+        {
+          no: 5,
+          speaker: {
+            ja: '２−１',
+            en: 'Class 2-1',
+            ko: '2-1반',
+            th: 'ห้อง 2-1'
+          },
+          time: '9:30',
+          status: 'lastcall',
+          gates: {
+            ja: '体育館',
+            en: 'Gymnasium',
+            ko: '체육관',
+            th: 'โรงยิม'
+          },
+          titles: {
+            ja: '2-1の意地',
+            en: '2-1 Pride',
+            ko: '2-1의 자존심',
+            th: 'ศักดิ์ศรีของห้อง 2-1'
+          },
+          statuses: {
+            ja: '開演前',
+            en: 'Before Show',
+            ko: '공연 전',
+            th: 'ก่อนเริ่มการแสดง'
+          }
+        },
+        {
+          no: 6,
+          speaker: {
+            ja: '全体',
+            en: 'All',
+            ko: '전체',
+            th: 'ทั้งหมด'
+          },
+          time: '10:00',
+          status: 'departed',
+          gates: {
+            ja: '体育館',
+            en: 'Gymnasium',
+            ko: '체육관',
+            th: 'โรงยิม'
+          },
+          titles: {
+            ja: '休憩開始',
+            en: 'Break Start',
+            ko: '휴식 시작',
+            th: 'เริ่มพัก'
+          },
+          statuses: {
+            ja: '開演前',
+            en: 'Before Show',
+            ko: '공연 전',
+            th: 'ก่อนเริ่มการแสดง'
+          }
+        },
+        {
+          no: 7,
+          speaker: {
+            ja: '全体',
+            en: 'All',
+            ko: '전체',
+            th: 'ทั้งหมด'
+          },
+          time: '10:20',
+          status: 'departed',
+          gates: {
+            ja: '体育館',
+            en: 'Gymnasium',
+            ko: '체육관',
+            th: 'โรงยิม'
+          },
+          titles: {
+            ja: '休憩終了',
+            en: 'Break End',
+            ko: '휴식 종료',
+            th: 'สิ้นสุดพัก'
+          },
+          statuses: {
+            ja: '開演前',
+            en: 'Before Show',
+            ko: '공연 전',
+            th: 'ก่อนเริ่มการแสดง'
+          }
+        },
+        {
+          no: 8,
+          speaker: {
+            ja: '3-1',
+            en: 'Class 3-1',
+            ko: '3-1반',
+            th: 'ห้อง 3-1'
+          },
+          time: '10:20',
+          status: 'boarding',
+          gates: {
+            ja: '体育館',
+            en: 'Gymnasium',
+            ko: '체육관',
+            th: 'โรงยิม'
+          },
+          titles: {
+            ja: '３-1演劇',
+            en: '3-1 Drama',
+            ko: '3-1 연극',
+            th: 'ละคร 3-1'
+          },
+          statuses: {
+            ja: '開演前',
+            en: 'Before Show',
+            ko: '공연 전',
+            th: 'ก่อนเริ่มการแสดง'
+          }
+        }
+      ];
+
+      const languages = [
+        { key: 'ja', label: 'JP' },
+        { key: 'en', label: 'EN' },
+        { key: 'ko', label: 'KR' },
+        { key: 'th', label: 'TH' }
+      ];
+
+      const airlineClass = {
+        ANA: 'airline-ana',
+        JAL: 'airline-jal',
+        FDA: 'airline-fda',
+        peach: 'airline-peach',
+        SKY: 'airline-sky'
+      };
+
+      const statusClass = {
+        checkin: 'status-checkin',
+        boarding: 'status-boarding',
+        delayed: 'status-delayed',
+        lastcall: 'status-lastcall',
+        departed: 'status-departed',
+        cancel: 'status-cancel'
+      };
+
+      const rows = document.getElementById('rows');
+      const rows2 = document.getElementById('rows-2');
+      const clock = document.getElementById('clock');
+      const lastUpdate = document.getElementById('last-update');
+      const headAirline = document.getElementById('head-airline');
+      const headNo = document.getElementById('head-no');
+      const headTitle = document.getElementById('head-title');
+      const headTime = document.getElementById('head-time');
+      const headStatus = document.getElementById('head-status');
+      const headPlace = document.getElementById('head-place');
+      let currentLanguageIndex = 0;
+      let languageTimer = null;
+
+      const headerLabels = {
+        ja: ['公演者', '番号', '開演名', '時刻', '状態', '場所'],
+        en: ['PERFORMER', 'NO.', 'PROGRAM', 'TIME', 'STATUS', 'PLACE'],
+        ko: ['공연자', '번호', '공연명', '시간', '상태', '장소'],
+        th: ['ผู้แสดง', 'ลำดับ', 'ชื่อรายการ', 'เวลา', 'สถานะ', 'สถานที่']
+      };
+
+      function renderClock() {
+        clock.textContent = '14:08';
+      }
+
+      function currentLanguage() {
+        return languages[currentLanguageIndex % languages.length];
+      }
+
+      function getLocalizedText(source, key) {
+        return source[key] || source.ja || '';
+      }
+
+      function renderHeaders() {
+        const language = currentLanguage().key;
+        const [airline, no, title, time, status, place] = headerLabels[language];
+        headAirline.textContent = airline;
+        headNo.textContent = no;
+        headTitle.textContent = title;
+        headTime.textContent = time;
+        headStatus.textContent = status;
+        headPlace.textContent = place;
+      }
+
+      function makeRow(item, index) {
+        const number = item.no ?? index + 1;
+        const language = currentLanguage();
+        const speaker = getLocalizedText(item.speaker, language.key);
+        const title = getLocalizedText(item.titles, language.key);
+        const statusText = getLocalizedText(item.statuses, language.key);
+        const placeText = getLocalizedText(item.gates, language.key);
+        const numberClass = 'no-cell';
+        const rowClass = 'row row-enter';
+        return `
+          <div class="${rowClass}" style="animation-delay:${index * 40}ms">
+            <div class="airline-cell">
+              <span class="airline-badge">${speaker || '—'}</span>
+            </div>
+            <div class="${numberClass}">${number}</div>
+            <div class="event-cell">
+              <div class="event-title">${title}</div>
+              <span class="lang-chip">${language.label}</span>
+            </div>
+            <div class="time-cell">${item.time}</div>
+            <div class="status-cell ${statusClass[item.status] || ''}">
+              <span class="status-static">
+                <span class="status-text">${statusText}</span>
+              </span>
+            </div>
+            <div class="gate-cell">
+              <div class="gate-number">${placeText}</div>
+            </div>
+          </div>
+        `;
+      }
+
+      function renderBoard() {
+        renderHeaders();
+        const midpoint = Math.ceil(flights.length / 2);
+        rows.innerHTML = flights.slice(0, midpoint).map(makeRow).join('');
+        rows2.innerHTML = flights.slice(midpoint).map((item, index) => makeRow(item, index + midpoint)).join('');
+      }
+
+      function updateStatus() {
+        const stamp = new Date();
+        lastUpdate.textContent = `更新 ${stamp.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })} / ${currentLanguage().label}`;
+      }
+
+      function advanceLanguage() {
+        currentLanguageIndex = (currentLanguageIndex + 1) % languages.length;
+        renderBoard();
+        updateStatus();
+
+        const duration = currentLanguage().key === 'ja' ? 10000 : 5000;
+        languageTimer = window.setTimeout(advanceLanguage, duration);
+      }
+
+      renderClock();
+      renderBoard();
+      updateStatus();
+
+      setInterval(renderClock, 1000);
+      setInterval(updateStatus, 15000);
+      languageTimer = window.setTimeout(advanceLanguage, 10000);
+    </script>
+  </body>
+</html>
