@@ -520,6 +520,20 @@
         font-size: 11px;
       }
 
+      .admin-sep {
+        margin-top: 12px;
+        padding-top: 10px;
+        border-top: 1px solid rgba(255, 255, 255, 0.14);
+      }
+
+      .admin-subtitle {
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        color: #eef4ff;
+        margin-bottom: 8px;
+      }
+
       .blink {
         display: inline-flex;
         align-items: center;
@@ -697,9 +711,49 @@
       <div class="admin-actions">
         <button id="admin-save" type="button">保存</button>
         <button id="admin-reset" type="button">行を初期化</button>
+        <button id="admin-delete" type="button">行を削除</button>
         <button id="admin-undo" type="button">一つ戻す</button>
         <button id="admin-redo" type="button">やり直し</button>
         <button id="admin-close" type="button">閉じる</button>
+      </div>
+      <div class="admin-sep">
+        <div class="admin-subtitle">案内を追加</div>
+        <div class="admin-grid">
+          <label>
+            公演者（日本語）
+            <input id="admin-add-speaker" type="text" placeholder="例: 軽音楽部" />
+          </label>
+          <label>
+            開演名（日本語）
+            <input id="admin-add-title" type="text" placeholder="例: バンド演奏" />
+          </label>
+          <label>
+            状態（日本語）
+            <input id="admin-add-status" type="text" value="開演前" />
+          </label>
+          <label>
+            時刻
+            <input id="admin-add-time" type="text" value="--:--" />
+          </label>
+          <label>
+            場所（日本語）
+            <input id="admin-add-place" type="text" value="体育館" />
+          </label>
+          <label>
+            状態種別
+            <select id="admin-add-status-code">
+              <option value="checkin">checkin</option>
+              <option value="boarding">boarding</option>
+              <option value="lastcall">lastcall</option>
+              <option value="delayed">delayed</option>
+              <option value="departed">departed</option>
+              <option value="cancel">cancel</option>
+            </select>
+          </label>
+        </div>
+        <div class="admin-actions">
+          <button id="admin-add" type="button">この内容で追加</button>
+        </div>
       </div>
       <div id="admin-note" class="admin-note"></div>
     </section>
@@ -987,29 +1041,50 @@
       const ADMIN_STORAGE_KEY = 'festival-board-admin-v1';
       const TRANSLATE_TARGETS = ['en', 'ko', 'th'];
       const translationCache = {};
-      const rowSettings = loadRowSettings();
-      const historyStack = [cloneRowSettings(rowSettings)];
+      const adminState = loadAdminState();
+      const rowSettings = adminState.rows;
+      const hiddenNos = new Set(adminState.hiddenNos || []);
+      const customRows = Array.isArray(adminState.customRows) ? adminState.customRows : [];
+      const historyStack = [cloneAdminStateSnapshot()];
       let historyIndex = 0;
 
-      function loadRowSettings() {
+      function loadAdminState() {
         try {
           const raw = window.localStorage.getItem(ADMIN_STORAGE_KEY);
           if (!raw) {
-            return {};
+            return { rows: {}, hiddenNos: [], customRows: [] };
           }
           const parsed = JSON.parse(raw);
-          return parsed.rows && typeof parsed.rows === 'object' ? parsed.rows : {};
+          const rows = parsed.rows && typeof parsed.rows === 'object' ? parsed.rows : {};
+          const nextHidden = Array.isArray(parsed.hiddenNos) ? parsed.hiddenNos : [];
+          const nextCustomRows = Array.isArray(parsed.customRows) ? parsed.customRows : [];
+          return { rows, hiddenNos: nextHidden, customRows: nextCustomRows };
         } catch (error) {
-          return {};
+          return { rows: {}, hiddenNos: [], customRows: [] };
         }
       }
 
-      function saveRowSettings() {
-        window.localStorage.setItem(ADMIN_STORAGE_KEY, JSON.stringify({ rows: rowSettings }));
+      function saveAdminState() {
+        window.localStorage.setItem(
+          ADMIN_STORAGE_KEY,
+          JSON.stringify({
+            rows: rowSettings,
+            hiddenNos: Array.from(hiddenNos),
+            customRows
+          })
+        );
       }
 
       function cloneRowSettings(source) {
         return JSON.parse(JSON.stringify(source || {}));
+      }
+
+      function cloneAdminStateSnapshot() {
+        return {
+          rows: cloneRowSettings(rowSettings),
+          hiddenNos: Array.from(hiddenNos),
+          customRows: cloneRowSettings(customRows)
+        };
       }
 
       function replaceRowSettings(next) {
@@ -1019,11 +1094,48 @@
         Object.assign(rowSettings, cloneRowSettings(next));
       }
 
+      function replaceHiddenNos(next) {
+        hiddenNos.clear();
+        (next || []).forEach((no) => hiddenNos.add(no));
+      }
+
+      function replaceCustomRows(next) {
+        customRows.splice(0, customRows.length, ...(cloneRowSettings(next) || []));
+      }
+
+      function restoreAdminStateSnapshot(snapshot) {
+        replaceRowSettings(snapshot.rows || {});
+        replaceHiddenNos(snapshot.hiddenNos || []);
+        replaceCustomRows(snapshot.customRows || []);
+      }
+
       function pushHistorySnapshot() {
-        const snapshot = cloneRowSettings(rowSettings);
+        const snapshot = cloneAdminStateSnapshot();
         historyStack.splice(historyIndex + 1);
         historyStack.push(snapshot);
         historyIndex = historyStack.length - 1;
+      }
+
+      function getDisplayFlights() {
+        const rows = [...flights, ...customRows].filter((item) => !hiddenNos.has(item.no));
+        rows.sort((a, b) => (a.no || 0) - (b.no || 0));
+        return rows;
+      }
+
+      function getAllAdminFlights() {
+        const rows = [...flights, ...customRows];
+        rows.sort((a, b) => (a.no || 0) - (b.no || 0));
+        return rows;
+      }
+
+      function findAdminFlight(no) {
+        return getAllAdminFlights().find((entry) => String(entry.no) === String(no));
+      }
+
+      function nextRowNo() {
+        const maxBase = flights.reduce((max, item) => Math.max(max, item.no || 0), 0);
+        const maxCustom = customRows.reduce((max, item) => Math.max(max, item.no || 0), 0);
+        return Math.max(maxBase, maxCustom) + 1;
       }
 
       function escapeHtml(value) {
@@ -1170,24 +1282,58 @@
         const note = document.getElementById('admin-note');
         const saveButton = document.getElementById('admin-save');
         const resetButton = document.getElementById('admin-reset');
+        const deleteButton = document.getElementById('admin-delete');
         const undoButton = document.getElementById('admin-undo');
         const redoButton = document.getElementById('admin-redo');
         const closeButton = document.getElementById('admin-close');
+        const addSpeakerField = document.getElementById('admin-add-speaker');
+        const addTitleField = document.getElementById('admin-add-title');
+        const addStatusField = document.getElementById('admin-add-status');
+        const addTimeField = document.getElementById('admin-add-time');
+        const addPlaceField = document.getElementById('admin-add-place');
+        const addStatusCodeField = document.getElementById('admin-add-status-code');
+        const addButton = document.getElementById('admin-add');
 
         openButton.hidden = false;
 
-        noField.innerHTML = flights
-          .map((item) => `<option value="${item.no}">No.${item.no} ${escapeHtml(item.titles.ja)}</option>`)
-          .join('');
+        function refreshNoOptions(selectedNo) {
+          const items = getAllAdminFlights();
+          noField.innerHTML = items
+            .map((item) => {
+              const removedTag = hiddenNos.has(item.no) ? ' [削除中]' : '';
+              return `<option value="${item.no}">No.${item.no} ${escapeHtml(item.titles.ja || '新規案内')}${removedTag}</option>`;
+            })
+            .join('');
+          if (!items.length) {
+            noField.innerHTML = '<option value="">対象なし</option>';
+            return;
+          }
+          const nextNo = selectedNo && items.some((entry) => String(entry.no) === String(selectedNo))
+            ? String(selectedNo)
+            : String(items[0].no);
+          noField.value = nextNo;
+        }
+
+        refreshNoOptions();
 
         function applyForm(no) {
-          const item = flights.find((entry) => String(entry.no) === String(no));
+          const item = findAdminFlight(no);
+          if (!item) {
+            speakerField.value = '';
+            titleField.value = '';
+            statusField.value = '';
+            colorField.value = '#ffd76b';
+            blinkField.checked = false;
+            deleteButton.textContent = '行を削除';
+            return;
+          }
           const config = rowConfig(no);
           speakerField.value = config.speakerJa || item.speaker.ja || '';
           titleField.value = config.titleJa || item.titles.ja || '';
           statusField.value = config.statusJa || item.statuses.ja || '';
           colorField.value = config.color || '#ffd76b';
           blinkField.checked = Boolean(config.blink);
+          deleteButton.textContent = hiddenNos.has(item.no) ? '行を復元' : '行を削除';
           note.textContent = '';
         }
 
@@ -1198,7 +1344,8 @@
 
         function openPanel() {
           panel.hidden = false;
-          applyForm(noField.value || flights[0].no);
+          refreshNoOptions(noField.value);
+          applyForm(noField.value);
         }
 
         function closePanel() {
@@ -1207,7 +1354,11 @@
 
         async function saveCurrent() {
           const no = String(noField.value);
-          const item = flights.find((entry) => String(entry.no) === no);
+          const item = findAdminFlight(no);
+          if (!item) {
+            note.textContent = '対象行がありません';
+            return;
+          }
           const previous = rowConfig(no);
           const speakerJa = speakerField.value.trim();
           const titleJa = titleField.value.trim();
@@ -1262,11 +1413,12 @@
           }
 
           pushHistorySnapshot();
-          saveRowSettings();
+          saveAdminState();
           renderBoard();
           updateStatus();
           saveButton.disabled = false;
           resetButton.disabled = false;
+          refreshNoOptions(no);
           syncHistoryButtons();
           note.textContent = '保存しました（多言語を自動更新）';
         }
@@ -1275,7 +1427,7 @@
           const no = String(noField.value);
           delete rowSettings[no];
           pushHistorySnapshot();
-          saveRowSettings();
+          saveAdminState();
           applyForm(no);
           renderBoard();
           updateStatus();
@@ -1285,6 +1437,83 @@
           note.textContent = '初期化しました';
         }
 
+        function deleteCurrent() {
+          const no = String(noField.value);
+          const numericNo = Number(no);
+          if (!no) {
+            note.textContent = '削除対象がありません';
+            return;
+          }
+
+          if (hiddenNos.has(numericNo)) {
+            hiddenNos.delete(numericNo);
+            note.textContent = `No.${no} を復元しました`;
+          } else {
+            hiddenNos.add(numericNo);
+            note.textContent = `No.${no} を削除しました（一つ戻すで復元可能）`;
+          }
+
+          pushHistorySnapshot();
+          saveAdminState();
+          renderBoard();
+          updateStatus();
+          refreshNoOptions(no);
+          applyForm(noField.value);
+          syncHistoryButtons();
+        }
+
+        async function addNewRow() {
+          const speakerJa = addSpeakerField.value.trim();
+          const titleJa = addTitleField.value.trim();
+          const statusJa = addStatusField.value.trim() || '開演前';
+          const time = addTimeField.value.trim() || '--:--';
+          const placeJa = addPlaceField.value.trim() || '体育館';
+          const statusCode = addStatusCodeField.value || 'checkin';
+
+          if (!speakerJa || !titleJa) {
+            note.textContent = '追加には「公演者」と「開演名」が必要です';
+            return;
+          }
+
+          addButton.disabled = true;
+          note.textContent = '追加情報を翻訳中...';
+
+          const [speakerI18n, titleI18n, statusI18n, gatesI18n] = await Promise.all([
+            buildAutoTranslations(speakerJa),
+            buildAutoTranslations(titleJa),
+            buildAutoTranslations(statusJa),
+            buildAutoTranslations(placeJa)
+          ]);
+
+          const no = nextRowNo();
+          customRows.push({
+            no,
+            speaker: { ja: speakerJa, ...speakerI18n },
+            time,
+            status: statusCode,
+            gates: { ja: placeJa, ...gatesI18n },
+            titles: { ja: titleJa, ...titleI18n },
+            statuses: { ja: statusJa, ...statusI18n }
+          });
+
+          pushHistorySnapshot();
+          saveAdminState();
+          renderBoard();
+          updateStatus();
+          refreshNoOptions(no);
+          applyForm(no);
+          syncHistoryButtons();
+
+          addSpeakerField.value = '';
+          addTitleField.value = '';
+          addStatusField.value = '開演前';
+          addTimeField.value = '--:--';
+          addPlaceField.value = '体育館';
+          addStatusCodeField.value = 'checkin';
+          addButton.disabled = false;
+          note.textContent = `No.${no} を追加しました`;
+        }
+
         function undoCurrent() {
           if (historyIndex <= 0) {
             note.textContent = 'これ以上戻せません';
@@ -1292,8 +1521,9 @@
           }
 
           historyIndex -= 1;
-          replaceRowSettings(historyStack[historyIndex]);
-          saveRowSettings();
+          restoreAdminStateSnapshot(historyStack[historyIndex]);
+          saveAdminState();
+          refreshNoOptions(noField.value);
           applyForm(noField.value);
           renderBoard();
           updateStatus();
@@ -1308,8 +1538,9 @@
           }
 
           historyIndex += 1;
-          replaceRowSettings(historyStack[historyIndex]);
-          saveRowSettings();
+          restoreAdminStateSnapshot(historyStack[historyIndex]);
+          saveAdminState();
+          refreshNoOptions(noField.value);
           applyForm(noField.value);
           renderBoard();
           updateStatus();
@@ -1322,6 +1553,8 @@
         noField.addEventListener('change', () => applyForm(noField.value));
         saveButton.addEventListener('click', saveCurrent);
         resetButton.addEventListener('click', resetCurrent);
+        deleteButton.addEventListener('click', deleteCurrent);
+        addButton.addEventListener('click', addNewRow);
         undoButton.addEventListener('click', undoCurrent);
         redoButton.addEventListener('click', redoCurrent);
         syncHistoryButtons();
@@ -1329,9 +1562,10 @@
 
       function renderBoard() {
         renderHeaders();
-        const midpoint = Math.ceil(flights.length / 2);
-        rows.innerHTML = flights.slice(0, midpoint).map(makeRow).join('');
-        rows2.innerHTML = flights.slice(midpoint).map((item, index) => makeRow(item, index + midpoint)).join('');
+        const allRows = getDisplayFlights();
+        const midpoint = Math.ceil(allRows.length / 2);
+        rows.innerHTML = allRows.slice(0, midpoint).map(makeRow).join('');
+        rows2.innerHTML = allRows.slice(midpoint).map((item, index) => makeRow(item, index + midpoint)).join('');
       }
 
       function updateStatus() {
