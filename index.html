@@ -1225,14 +1225,17 @@
       const SYNC_FILE_API = 'https://api.github.com/repos/minao21101012/FestivalBoard/contents/data/board-state.json';
       const SYNC_FILE_URL = 'https://minao21101012.github.io/FestivalBoard/data/board-state.json';
       const TRANSLATE_TARGETS = ['en', 'ko', 'th'];
+      const isAdminMode = new URLSearchParams(window.location.search).get('admin') === '1';
       const translationCache = {};
-      const adminState = loadAdminState();
+      const adminState = isAdminMode
+        ? loadAdminState()
+        : { rows: {}, hiddenNos: [], customRows: [], delayMinutes: 0, notice: { ja: '', en: '', highlight: '', blink: '' } };
       const rowSettings = adminState.rows;
       const hiddenNos = new Set(adminState.hiddenNos || []);
       const customRows = Array.isArray(adminState.customRows) ? adminState.customRows : [];
       let globalDelayMinutes = Number.isFinite(adminState.delayMinutes) ? Number(adminState.delayMinutes) : 0;
       let footerNotice = adminState.notice || { ja: '', en: '', highlight: '', blink: '' };
-      let sharedStateVersion = Number(adminState.updatedAt || 0);
+      let sharedStateVersion = isAdminMode ? Number(adminState.updatedAt || 0) : -1;
       let isApplyingSharedState = false;
       const historyStack = [cloneAdminStateSnapshot()];
       let historyIndex = 0;
@@ -1366,7 +1369,11 @@
           }
           const remote = await response.json();
           const remoteVersion = Number(remote.updatedAt || 0);
-          if (!remoteVersion || remoteVersion <= sharedStateVersion) {
+          if (!remoteVersion) {
+            return;
+          }
+
+          if (isAdminMode && remoteVersion <= sharedStateVersion) {
             return;
           }
 
@@ -1700,7 +1707,6 @@
       }
 
       function setupAdminPanel() {
-        const isAdminMode = new URLSearchParams(window.location.search).get('admin') === '1';
         if (!isAdminMode) {
           return;
         }
