@@ -871,6 +871,7 @@
       <div class="admin-actions">
         <button id="admin-save" type="button">保存</button>
         <button id="admin-delay-save" type="button">遅延設定を反映</button>
+        <button id="admin-sync-token" type="button">公開同期設定</button>
         <button id="admin-reset" type="button">行を初期化</button>
         <button id="admin-delete" type="button">行を削除</button>
         <button id="admin-undo" type="button">一つ戻す</button>
@@ -1220,6 +1221,9 @@
       };
 
       const ADMIN_STORAGE_KEY = 'festival-board-admin-v1';
+      const SYNC_TOKEN_KEY = 'festival-board-sync-token';
+      const SYNC_FILE_API = 'https://api.github.com/repos/minao21101012/FestivalBoard/contents/data/board-state.json';
+      const SYNC_FILE_URL = 'https://minao21101012.github.io/FestivalBoard/data/board-state.json';
       const TRANSLATE_TARGETS = ['en', 'ko', 'th'];
       const translationCache = {};
       const adminState = loadAdminState();
@@ -1228,6 +1232,8 @@
       const customRows = Array.isArray(adminState.customRows) ? adminState.customRows : [];
       let globalDelayMinutes = Number.isFinite(adminState.delayMinutes) ? Number(adminState.delayMinutes) : 0;
       let footerNotice = adminState.notice || { ja: '', en: '', highlight: '', blink: '' };
+      let sharedStateVersion = Number(adminState.updatedAt || 0);
+      let isApplyingSharedState = false;
       const historyStack = [cloneAdminStateSnapshot()];
       let historyIndex = 0;
 
@@ -1257,6 +1263,9 @@
       }
 
       function saveAdminState() {
+        if (!isApplyingSharedState) {
+          sharedStateVersion = Date.now();
+        }
         window.localStorage.setItem(
           ADMIN_STORAGE_KEY,
           JSON.stringify({
@@ -1264,9 +1273,98 @@
             hiddenNos: Array.from(hiddenNos),
             customRows,
             delayMinutes: globalDelayMinutes,
-            notice: footerNotice
+            notice: footerNotice,
+            updatedAt: sharedStateVersion
           })
         );
+      }
+
+      function getSyncToken() {
+        return window.localStorage.getItem(SYNC_TOKEN_KEY) || '';
+      }
+
+      function encodeBase64Unicode(text) {
+        const bytes = new TextEncoder().encode(text);
+        let binary = '';
+        bytes.forEach((byte) => {
+          binary += String.fromCharCode(byte);
+        });
+        return btoa(binary);
+      }
+
+      async function publishSharedState() {
+        const token = getSyncToken();
+        if (!token) {
+          return false;
+        }
+
+        const stateText = window.localStorage.getItem(ADMIN_STORAGE_KEY);
+        if (!stateText) {
+          return false;
+        }
+
+        let sha;
+        try {
+          const current = await fetch(SYNC_FILE_API, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: 'application/vnd.github+json'
+            }
+          });
+          if (current.ok) {
+            const payload = await current.json();
+            sha = payload.sha;
+          }
+        } catch (error) {
+          return false;
+        }
+
+        const body = {
+          message: `Update board state ${new Date().toISOString()}`,
+          content: encodeBase64Unicode(stateText)
+        };
+        if (sha) {
+          body.sha = sha;
+        }
+
+        try {
+          const response = await fetch(SYNC_FILE_API, {
+            method: 'PUT',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: 'application/vnd.github+json',
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
+          });
+          return response.ok;
+        } catch (error) {
+          return false;
+        }
+      }
+
+      async function pullSharedState() {
+        try {
+          const response = await fetch(`${SYNC_FILE_URL}?t=${Date.now()}`, { cache: 'no-store' });
+          if (!response.ok) {
+            return;
+          }
+          const remote = await response.json();
+          const remoteVersion = Number(remote.updatedAt || 0);
+          if (!remoteVersion || remoteVersion <= sharedStateVersion) {
+            return;
+          }
+
+          isApplyingSharedState = true;
+          applyStateFromStorage(remote);
+          sharedStateVersion = remoteVersion;
+          saveAdminState();
+          renderBoard();
+          updateStatus();
+          isApplyingSharedState = false;
+        } catch (error) {
+          isApplyingSharedState = false;
+        }
       }
 
       function cloneRowSettings(source) {
@@ -1604,6 +1702,7 @@
         const note = document.getElementById('admin-note');
         const saveButton = document.getElementById('admin-save');
         const delaySaveButton = document.getElementById('admin-delay-save');
+        const syncTokenButton = document.getElementById('admin-sync-token');
         const resetButton = document.getElementById('admin-reset');
         const deleteButton = document.getElementById('admin-delete');
         const undoButton = document.getElementById('admin-undo');
@@ -1750,6 +1849,7 @@
 
           pushHistorySnapshot();
           saveAdminState();
+          publishSharedState();
           renderBoard();
           updateStatus();
           saveButton.disabled = false;
@@ -1770,6 +1870,7 @@
           globalDelayMinutes = Math.trunc(delay);
           pushHistorySnapshot();
           saveAdminState();
+          publishSharedState();
           renderBoard();
           updateStatus();
           syncHistoryButtons();
@@ -1801,6 +1902,7 @@
 
           pushHistorySnapshot();
           saveAdminState();
+          publishSharedState();
           updateFooterNotice();
           updateStatus();
           syncHistoryButtons();
@@ -1814,6 +1916,7 @@
           delete rowSettings[no];
           pushHistorySnapshot();
           saveAdminState();
+          publishSharedState();
           applyForm(no);
           renderBoard();
           updateStatus();
@@ -1841,6 +1944,7 @@
 
           pushHistorySnapshot();
           saveAdminState();
+          publishSharedState();
           renderBoard();
           updateStatus();
           refreshNoOptions(no);
@@ -1896,6 +2000,7 @@
 
           pushHistorySnapshot();
           saveAdminState();
+          publishSharedState();
           renderBoard();
           updateStatus();
           refreshNoOptions(no);
@@ -1921,6 +2026,7 @@
           historyIndex -= 1;
           restoreAdminStateSnapshot(historyStack[historyIndex]);
           saveAdminState();
+          publishSharedState();
           refreshNoOptions(noField.value);
           applyForm(noField.value);
           renderBoard();
@@ -1938,6 +2044,7 @@
           historyIndex += 1;
           restoreAdminStateSnapshot(historyStack[historyIndex]);
           saveAdminState();
+          publishSharedState();
           refreshNoOptions(noField.value);
           applyForm(noField.value);
           renderBoard();
@@ -1946,11 +2053,29 @@
           note.textContent = '戻した操作をやり直しました';
         }
 
+        async function configureSyncToken() {
+          const current = getSyncToken();
+          const input = window.prompt('GitHubトークンを入力（repo権限）。削除する場合は空欄でOK', current);
+          if (input === null) {
+            return;
+          }
+          const token = input.trim();
+          if (token) {
+            window.localStorage.setItem(SYNC_TOKEN_KEY, token);
+            note.textContent = '公開同期トークンを保存しました';
+            await publishSharedState();
+          } else {
+            window.localStorage.removeItem(SYNC_TOKEN_KEY);
+            note.textContent = '公開同期トークンを削除しました';
+          }
+        }
+
         openButton.addEventListener('click', openPanel);
         closeButton.addEventListener('click', closePanel);
         noField.addEventListener('change', () => applyForm(noField.value));
         saveButton.addEventListener('click', saveCurrent);
         delaySaveButton.addEventListener('click', saveDelaySetting);
+        syncTokenButton.addEventListener('click', configureSyncToken);
         resetButton.addEventListener('click', resetCurrent);
         deleteButton.addEventListener('click', deleteCurrent);
         addButton.addEventListener('click', addNewRow);
@@ -1990,6 +2115,7 @@
       renderBoard();
       updateStatus();
       setupAdminPanel();
+      pullSharedState();
 
       window.addEventListener('storage', (event) => {
         if (event.key === ADMIN_STORAGE_KEY) {
@@ -1999,6 +2125,7 @@
 
       setInterval(renderClock, 1000);
       setInterval(updateStatus, 15000);
+      setInterval(pullSharedState, 8000);
       languageTimer = window.setTimeout(advanceLanguage, 10000);
     </script>
   </body>
