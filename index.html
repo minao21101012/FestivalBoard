@@ -1234,6 +1234,7 @@
       let footerNotice = adminState.notice || { ja: '', en: '', highlight: '', blink: '' };
       let sharedStateVersion = Number(adminState.updatedAt || 0);
       let isApplyingSharedState = false;
+      let lastPublishError = '';
       const historyStack = [cloneAdminStateSnapshot()];
       let historyIndex = 0;
 
@@ -1295,11 +1296,13 @@
       async function publishSharedState() {
         const token = getSyncToken();
         if (!token) {
+          lastPublishError = 'トークン未設定です';
           return false;
         }
 
         const stateText = window.localStorage.getItem(ADMIN_STORAGE_KEY);
         if (!stateText) {
+          lastPublishError = '保存データが見つかりません';
           return false;
         }
 
@@ -1314,8 +1317,13 @@
           if (current.ok) {
             const payload = await current.json();
             sha = payload.sha;
+          } else if (current.status !== 404) {
+            const detail = await current.text();
+            lastPublishError = `事前確認エラー (${current.status}) ${detail.slice(0, 120)}`;
+            return false;
           }
         } catch (error) {
+          lastPublishError = 'GitHub APIへの接続に失敗しました';
           return false;
         }
 
@@ -1337,8 +1345,15 @@
             },
             body: JSON.stringify(body)
           });
-          return response.ok;
+          if (!response.ok) {
+            const detail = await response.text();
+            lastPublishError = `公開更新エラー (${response.status}) ${detail.slice(0, 120)}`;
+            return false;
+          }
+          lastPublishError = '';
+          return true;
         } catch (error) {
+          lastPublishError = '公開更新に失敗しました（通信エラー）';
           return false;
         }
       }
@@ -1770,6 +1785,14 @@
           redoButton.disabled = historyIndex >= historyStack.length - 1;
         }
 
+        function publishSharedStateInBackground() {
+          publishSharedState().then((ok) => {
+            if (!ok && getSyncToken()) {
+              note.textContent = `公開同期に失敗しました: ${lastPublishError || 'トークン権限を確認してください'}`;
+            }
+          });
+        }
+
         function openPanel() {
           panel.hidden = false;
           refreshNoOptions(noField.value);
@@ -1849,7 +1872,7 @@
 
           pushHistorySnapshot();
           saveAdminState();
-          publishSharedState();
+          publishSharedStateInBackground();
           renderBoard();
           updateStatus();
           saveButton.disabled = false;
@@ -1870,7 +1893,7 @@
           globalDelayMinutes = Math.trunc(delay);
           pushHistorySnapshot();
           saveAdminState();
-          publishSharedState();
+          publishSharedStateInBackground();
           renderBoard();
           updateStatus();
           syncHistoryButtons();
@@ -1902,7 +1925,7 @@
 
           pushHistorySnapshot();
           saveAdminState();
-          publishSharedState();
+          publishSharedStateInBackground();
           updateFooterNotice();
           updateStatus();
           syncHistoryButtons();
@@ -1916,7 +1939,7 @@
           delete rowSettings[no];
           pushHistorySnapshot();
           saveAdminState();
-          publishSharedState();
+          publishSharedStateInBackground();
           applyForm(no);
           renderBoard();
           updateStatus();
@@ -1944,7 +1967,7 @@
 
           pushHistorySnapshot();
           saveAdminState();
-          publishSharedState();
+          publishSharedStateInBackground();
           renderBoard();
           updateStatus();
           refreshNoOptions(no);
@@ -2000,7 +2023,7 @@
 
           pushHistorySnapshot();
           saveAdminState();
-          publishSharedState();
+          publishSharedStateInBackground();
           renderBoard();
           updateStatus();
           refreshNoOptions(no);
@@ -2026,7 +2049,7 @@
           historyIndex -= 1;
           restoreAdminStateSnapshot(historyStack[historyIndex]);
           saveAdminState();
-          publishSharedState();
+          publishSharedStateInBackground();
           refreshNoOptions(noField.value);
           applyForm(noField.value);
           renderBoard();
@@ -2044,7 +2067,7 @@
           historyIndex += 1;
           restoreAdminStateSnapshot(historyStack[historyIndex]);
           saveAdminState();
-          publishSharedState();
+          publishSharedStateInBackground();
           refreshNoOptions(noField.value);
           applyForm(noField.value);
           renderBoard();
@@ -2062,8 +2085,10 @@
           const token = input.trim();
           if (token) {
             window.localStorage.setItem(SYNC_TOKEN_KEY, token);
-            note.textContent = '公開同期トークンを保存しました';
-            await publishSharedState();
+            const ok = await publishSharedState();
+            note.textContent = ok
+              ? '公開同期トークンを保存しました（接続確認OK）'
+              : `トークン保存後の接続確認に失敗しました: ${lastPublishError || '権限を確認してください'}`;
           } else {
             window.localStorage.removeItem(SYNC_TOKEN_KEY);
             note.textContent = '公開同期トークンを削除しました';
@@ -2121,6 +2146,16 @@
         if (event.key === ADMIN_STORAGE_KEY) {
           syncStateFromStorage();
         }
+      });
+
+      window.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+          pullSharedState();
+        }
+      });
+
+      window.addEventListener('pageshow', () => {
+        pullSharedState();
       });
 
       setInterval(renderClock, 1000);
