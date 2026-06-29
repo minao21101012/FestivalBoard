@@ -583,6 +583,52 @@
         font-size: 12px;
       }
 
+      .admin-inline-row {
+        display: flex;
+        gap: 8px;
+        margin-top: 4px;
+      }
+
+      .admin-inline-row button {
+        flex: 0 0 auto;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: rgba(255, 255, 255, 0.06);
+        color: #eef4ff;
+        border-radius: 6px;
+        padding: 7px 10px;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .admin-tag-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 8px;
+      }
+
+      .admin-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(255, 215, 107, 0.16);
+        color: #ffe19a;
+        border: 1px solid rgba(255, 215, 107, 0.35);
+        border-radius: 999px;
+        padding: 2px 8px;
+        font-size: 11px;
+      }
+
+      .admin-tag button {
+        border: 0;
+        background: transparent;
+        color: inherit;
+        cursor: pointer;
+        font-size: 11px;
+        padding: 0;
+      }
+
       .admin-actions {
         display: flex;
         flex-wrap: wrap;
@@ -949,7 +995,12 @@
           </label>
           <label>
             黄色キーワード
-            <input id="admin-notice-highlight" type="text" placeholder="例: 飲食" />
+            <input id="admin-notice-highlight" type="text" hidden />
+            <div class="admin-inline-row">
+              <input id="admin-notice-highlight-word" type="text" placeholder="1単語ずつ入力して追加" />
+              <button id="admin-notice-highlight-add" type="button">追加</button>
+            </div>
+            <div id="admin-notice-highlight-list" class="admin-tag-list"></div>
           </label>
           <label>
             点滅キーワード
@@ -1599,12 +1650,15 @@
 
       function renderNoticeHtml(text, highlightWord, blinkWord) {
         let html = escapeHtml(text || '');
-        const highlight = escapeHtml((highlightWord || '').trim());
+        const highlights = String(highlightWord || '')
+          .split(/[\s,、]+/)
+          .map((word) => escapeHtml(word.trim()))
+          .filter(Boolean);
         const blink = escapeHtml((blinkWord || '').trim());
 
-        if (highlight) {
+        highlights.forEach((highlight) => {
           html = html.split(highlight).join(`<span class="notice-highlight">${highlight}</span>`);
-        }
+        });
         if (blink) {
           html = html.split(blink).join(`<span class="notice-blinkword">${blink}</span>`);
         }
@@ -1847,8 +1901,48 @@
         const addButton = document.getElementById('admin-add');
         const noticeJaField = document.getElementById('admin-notice-ja');
         const noticeHighlightField = document.getElementById('admin-notice-highlight');
+        const noticeHighlightWordField = document.getElementById('admin-notice-highlight-word');
+        const noticeHighlightAddButton = document.getElementById('admin-notice-highlight-add');
+        const noticeHighlightList = document.getElementById('admin-notice-highlight-list');
         const noticeBlinkField = document.getElementById('admin-notice-blink');
         const noticeSaveButton = document.getElementById('admin-notice-save');
+        let noticeHighlights = [];
+
+        function parseHighlightKeywords(text) {
+          return Array.from(new Set(
+            String(text || '')
+              .split(/[\s,、]+/)
+              .map((word) => word.trim())
+              .filter(Boolean)
+          ));
+        }
+
+        function syncHighlightField() {
+          noticeHighlightField.value = noticeHighlights.join(', ');
+        }
+
+        function renderHighlightList() {
+          if (!noticeHighlightList) {
+            return;
+          }
+          noticeHighlightList.innerHTML = noticeHighlights
+            .map((word, index) => `<span class="admin-tag">${escapeHtml(word)}<button type="button" data-highlight-index="${index}" aria-label="削除">×</button></span>`)
+            .join('');
+          syncHighlightField();
+        }
+
+        function addHighlightWord(rawWord) {
+          const words = parseHighlightKeywords(rawWord);
+          if (!words.length) {
+            return;
+          }
+          words.forEach((word) => {
+            if (!noticeHighlights.includes(word)) {
+              noticeHighlights.push(word);
+            }
+          });
+          renderHighlightList();
+        }
 
         openButton.hidden = false;
 
@@ -1922,7 +2016,11 @@
           refreshNoOptions(noField.value);
           applyForm(noField.value);
           noticeJaField.value = footerNotice.ja || '';
-          noticeHighlightField.value = footerNotice.highlight || '';
+          noticeHighlights = parseHighlightKeywords(footerNotice.highlight || '');
+          renderHighlightList();
+          if (noticeHighlightWordField) {
+            noticeHighlightWordField.value = '';
+          }
           noticeBlinkField.value = footerNotice.blink || '';
         }
 
@@ -2241,6 +2339,38 @@
         deleteButton.addEventListener('click', deleteCurrent);
         addButton.addEventListener('click', addNewRow);
         noticeSaveButton.addEventListener('click', saveNoticeSetting);
+        if (noticeHighlightAddButton) {
+          noticeHighlightAddButton.addEventListener('click', () => {
+            addHighlightWord(noticeHighlightWordField ? noticeHighlightWordField.value : '');
+            if (noticeHighlightWordField) {
+              noticeHighlightWordField.value = '';
+              noticeHighlightWordField.focus();
+            }
+          });
+        }
+        if (noticeHighlightWordField) {
+          noticeHighlightWordField.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              addHighlightWord(noticeHighlightWordField.value);
+              noticeHighlightWordField.value = '';
+            }
+          });
+        }
+        if (noticeHighlightList) {
+          noticeHighlightList.addEventListener('click', (event) => {
+            const button = event.target.closest('button[data-highlight-index]');
+            if (!button) {
+              return;
+            }
+            const index = Number(button.getAttribute('data-highlight-index'));
+            if (!Number.isFinite(index) || index < 0 || index >= noticeHighlights.length) {
+              return;
+            }
+            noticeHighlights.splice(index, 1);
+            renderHighlightList();
+          });
+        }
         undoButton.addEventListener('click', undoCurrent);
         redoButton.addEventListener('click', redoCurrent);
         syncHistoryButtons();
