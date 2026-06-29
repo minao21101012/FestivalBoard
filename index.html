@@ -1245,7 +1245,10 @@
       const ADMIN_STORAGE_KEY = 'festival-board-admin-v1';
       const SYNC_TOKEN_KEY = 'festival-board-sync-token';
       const SYNC_FILE_API = 'https://api.github.com/repos/minao21101012/FestivalBoard/contents/data/board-state.json';
-      const SYNC_FILE_URL = 'https://minao21101012.github.io/FestivalBoard/data/board-state.json';
+      const SYNC_FILE_URLS = [
+        'https://raw.githubusercontent.com/minao21101012/FestivalBoard/main/data/board-state.json',
+        'https://minao21101012.github.io/FestivalBoard/data/board-state.json'
+      ];
       const TRANSLATE_TARGETS = ['en', 'ko', 'th'];
       const isAdminMode = new URLSearchParams(window.location.search).get('admin') === '1';
       const translationCache = {};
@@ -1373,23 +1376,60 @@
         }
       }
 
-      async function publishSharedStateWithNote(baseMessage) {
+      function setAdminNote(noteNode, text) {
+        if (noteNode) {
+          noteNode.textContent = text;
+        }
+      }
+
+      function parseDelayMinutesInput(value) {
+        const normalized = String(value || '')
+          .trim()
+          .replace(/[０-９]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 65248))
+          .replace(/[＋]/g, '+')
+          .replace(/[－]/g, '-')
+          .replace(/\s+/g, '');
+        if (!normalized) {
+          return 0;
+        }
+        if (!/^[+-]?\d+$/.test(normalized)) {
+          return Number.NaN;
+        }
+        return Number(normalized);
+      }
+
+      async function publishSharedStateWithNote(noteNode, baseMessage) {
         const result = await publishSharedState();
         if (!result.ok) {
-          note.textContent = `${baseMessage} / 公開同期NG: ${result.reason}`;
+          setAdminNote(noteNode, `${baseMessage} / 公開同期NG: ${result.reason}`);
           return false;
         }
-        note.textContent = `${baseMessage} / 公開同期OK`;
+        setAdminNote(noteNode, `${baseMessage} / 公開同期OK`);
         return true;
+      }
+
+      async function fetchSharedStatePayload() {
+        for (const baseUrl of SYNC_FILE_URLS) {
+          try {
+            const response = await fetch(`${baseUrl}?t=${Date.now()}`, { cache: 'no-store' });
+            if (!response.ok) {
+              continue;
+            }
+            const remote = await response.json();
+            return remote;
+          } catch (error) {
+            continue;
+          }
+        }
+        return null;
       }
 
       async function pullSharedState() {
         try {
-          const response = await fetch(`${SYNC_FILE_URL}?t=${Date.now()}`, { cache: 'no-store' });
-          if (!response.ok) {
+          const remote = await fetchSharedStatePayload();
+          if (!remote) {
             return;
           }
-          const remote = await response.json();
           const remoteVersion = Number(remote.updatedAt || 0);
           if (!remoteVersion) {
             return;
@@ -1939,7 +1979,7 @@
 
           pushHistorySnapshot();
           saveAdminState();
-          await publishSharedStateWithNote('保存しました（多言語を自動更新）');
+          await publishSharedStateWithNote(note, '保存しました（多言語を自動更新）');
           renderBoard();
           updateStatus();
           saveButton.disabled = false;
@@ -1950,7 +1990,7 @@
         }
 
         async function saveDelaySetting() {
-          const delay = Number(delayField.value || 0);
+          const delay = parseDelayMinutesInput(delayField.value);
           if (!Number.isFinite(delay)) {
             note.textContent = '遅延/早発は数値で入力してください';
             return;
@@ -1964,11 +2004,11 @@
           syncHistoryButtons();
 
           if (globalDelayMinutes === 0) {
-            await publishSharedStateWithNote('遅延設定を0分に戻しました');
+            await publishSharedStateWithNote(note, '遅延設定を0分に戻しました');
           } else if (globalDelayMinutes > 0) {
-            await publishSharedStateWithNote(`${globalDelayMinutes}分の遅延を反映しました`);
+            await publishSharedStateWithNote(note, `${globalDelayMinutes}分の遅延を反映しました`);
           } else {
-            await publishSharedStateWithNote(`${Math.abs(globalDelayMinutes)}分の早発を反映しました`);
+            await publishSharedStateWithNote(note, `${Math.abs(globalDelayMinutes)}分の早発を反映しました`);
           }
         }
 
@@ -1990,7 +2030,7 @@
 
           pushHistorySnapshot();
           saveAdminState();
-          await publishSharedStateWithNote('注意事項を保存しました（JP/EN）');
+          await publishSharedStateWithNote(note, '注意事項を保存しました（JP/EN）');
           updateFooterNotice();
           updateStatus();
           syncHistoryButtons();
@@ -2003,7 +2043,7 @@
           delete rowSettings[no];
           pushHistorySnapshot();
           saveAdminState();
-          await publishSharedStateWithNote('初期化しました');
+          await publishSharedStateWithNote(note, '初期化しました');
           applyForm(no);
           renderBoard();
           updateStatus();
@@ -2030,7 +2070,7 @@
 
           pushHistorySnapshot();
           saveAdminState();
-          await publishSharedStateWithNote(note.textContent);
+          await publishSharedStateWithNote(note, note.textContent);
           renderBoard();
           updateStatus();
           refreshNoOptions(no);
@@ -2086,7 +2126,7 @@
 
           pushHistorySnapshot();
           saveAdminState();
-          await publishSharedStateWithNote(`No.${no} を追加しました`);
+          await publishSharedStateWithNote(note, `No.${no} を追加しました`);
           renderBoard();
           updateStatus();
           refreshNoOptions(no);
@@ -2111,7 +2151,7 @@
           historyIndex -= 1;
           restoreAdminStateSnapshot(historyStack[historyIndex]);
           saveAdminState();
-          await publishSharedStateWithNote('1つ前の状態に戻しました');
+          await publishSharedStateWithNote(note, '1つ前の状態に戻しました');
           refreshNoOptions(noField.value);
           applyForm(noField.value);
           renderBoard();
@@ -2128,7 +2168,7 @@
           historyIndex += 1;
           restoreAdminStateSnapshot(historyStack[historyIndex]);
           saveAdminState();
-          await publishSharedStateWithNote('戻した操作をやり直しました');
+          await publishSharedStateWithNote(note, '戻した操作をやり直しました');
           refreshNoOptions(noField.value);
           applyForm(noField.value);
           renderBoard();
@@ -2145,7 +2185,7 @@
           const token = input.trim();
           if (token) {
             window.localStorage.setItem(SYNC_TOKEN_KEY, token);
-            await publishSharedStateWithNote('公開同期トークンを保存しました');
+            await publishSharedStateWithNote(note, '公開同期トークンを保存しました');
           } else {
             window.localStorage.removeItem(SYNC_TOKEN_KEY);
             note.textContent = '公開同期トークンを削除しました';
@@ -2225,7 +2265,7 @@
 
       setInterval(renderClock, 1000);
       setInterval(updateStatus, 15000);
-      setInterval(pullSharedState, 8000);
+      setInterval(pullSharedState, 2000);
       languageTimer = window.setTimeout(advanceLanguage, 10000);
       noticeLanguageTimer = window.setTimeout(advanceNoticeLanguage, 10000);
     </script>
