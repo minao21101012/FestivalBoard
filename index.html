@@ -1503,13 +1503,13 @@
       function getDisplayFlights() {
         const rows = [...flights, ...customRows].filter((item) => !hiddenNos.has(item.no));
         rows.sort((a, b) => {
-          const ta = parseClockToMinutes(a.time);
-          const tb = parseClockToMinutes(b.time);
+          const ca = rowConfig(a.no || 0);
+          const cb = rowConfig(b.no || 0);
+          const ta = parseClockToMinutes(ca.time || a.time);
+          const tb = parseClockToMinutes(cb.time || b.time);
           if (ta !== tb) {
             return ta - tb;
           }
-          const ca = rowConfig(a.no || 0);
-          const cb = rowConfig(b.no || 0);
           const na = Number.isFinite(ca.displayNo) && Number(ca.displayNo) > 0 ? Number(ca.displayNo) : (a.no || 0);
           const nb = Number.isFinite(cb.displayNo) && Number(cb.displayNo) > 0 ? Number(cb.displayNo) : (b.no || 0);
           return na - nb;
