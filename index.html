@@ -1004,7 +1004,12 @@
           </label>
           <label>
             点滅キーワード
-            <input id="admin-notice-blink" type="text" placeholder="例: 立入禁止" />
+            <input id="admin-notice-blink" type="text" hidden />
+            <div class="admin-inline-row">
+              <input id="admin-notice-blink-word" type="text" placeholder="1単語ずつ入力して追加" />
+              <button id="admin-notice-blink-add" type="button">追加</button>
+            </div>
+            <div id="admin-notice-blink-list" class="admin-tag-list"></div>
           </label>
         </div>
         <div class="admin-actions">
@@ -1261,6 +1266,7 @@
         { key: 'ja', label: 'JP' },
         { key: 'en', label: 'EN' }
       ];
+      const noticeLanguagePattern = ['ja', 'ja', 'en'];
 
       const airlineClass = {
         ANA: 'airline-ana',
@@ -1654,19 +1660,23 @@
           .split(/[\s,、]+/)
           .map((word) => escapeHtml(word.trim()))
           .filter(Boolean);
-        const blink = escapeHtml((blinkWord || '').trim());
+        const blinks = String(blinkWord || '')
+          .split(/[\s,、]+/)
+          .map((word) => escapeHtml(word.trim()))
+          .filter(Boolean);
 
         highlights.forEach((highlight) => {
           html = html.split(highlight).join(`<span class="notice-highlight">${highlight}</span>`);
         });
-        if (blink) {
+        blinks.forEach((blink) => {
           html = html.split(blink).join(`<span class="notice-blinkword">${blink}</span>`);
-        }
+        });
         return html;
       }
 
       function currentNoticeLanguage() {
-        return noticeLanguages[currentNoticeLanguageIndex % noticeLanguages.length];
+        const key = noticeLanguagePattern[currentNoticeLanguageIndex % noticeLanguagePattern.length] || 'ja';
+        return noticeLanguages.find((language) => language.key === key) || noticeLanguages[0];
       }
 
       function updateFooterNotice(forceUpdate) {
@@ -1905,10 +1915,14 @@
         const noticeHighlightAddButton = document.getElementById('admin-notice-highlight-add');
         const noticeHighlightList = document.getElementById('admin-notice-highlight-list');
         const noticeBlinkField = document.getElementById('admin-notice-blink');
+        const noticeBlinkWordField = document.getElementById('admin-notice-blink-word');
+        const noticeBlinkAddButton = document.getElementById('admin-notice-blink-add');
+        const noticeBlinkList = document.getElementById('admin-notice-blink-list');
         const noticeSaveButton = document.getElementById('admin-notice-save');
         let noticeHighlights = [];
+        let noticeBlinks = [];
 
-        function parseHighlightKeywords(text) {
+        function parseNoticeKeywords(text) {
           return Array.from(new Set(
             String(text || '')
               .split(/[\s,、]+/)
@@ -1919,6 +1933,10 @@
 
         function syncHighlightField() {
           noticeHighlightField.value = noticeHighlights.join(', ');
+        }
+
+        function syncBlinkField() {
+          noticeBlinkField.value = noticeBlinks.join(', ');
         }
 
         function renderHighlightList() {
@@ -1932,7 +1950,7 @@
         }
 
         function addHighlightWord(rawWord) {
-          const words = parseHighlightKeywords(rawWord);
+          const words = parseNoticeKeywords(rawWord);
           if (!words.length) {
             return;
           }
@@ -1942,6 +1960,29 @@
             }
           });
           renderHighlightList();
+        }
+
+        function renderBlinkList() {
+          if (!noticeBlinkList) {
+            return;
+          }
+          noticeBlinkList.innerHTML = noticeBlinks
+            .map((word, index) => `<span class="admin-tag">${escapeHtml(word)}<button type="button" data-blink-index="${index}" aria-label="削除">×</button></span>`)
+            .join('');
+          syncBlinkField();
+        }
+
+        function addBlinkWord(rawWord) {
+          const words = parseNoticeKeywords(rawWord);
+          if (!words.length) {
+            return;
+          }
+          words.forEach((word) => {
+            if (!noticeBlinks.includes(word)) {
+              noticeBlinks.push(word);
+            }
+          });
+          renderBlinkList();
         }
 
         openButton.hidden = false;
@@ -2016,12 +2057,16 @@
           refreshNoOptions(noField.value);
           applyForm(noField.value);
           noticeJaField.value = footerNotice.ja || '';
-          noticeHighlights = parseHighlightKeywords(footerNotice.highlight || '');
+          noticeHighlights = parseNoticeKeywords(footerNotice.highlight || '');
           renderHighlightList();
+          noticeBlinks = parseNoticeKeywords(footerNotice.blink || '');
+          renderBlinkList();
           if (noticeHighlightWordField) {
             noticeHighlightWordField.value = '';
           }
-          noticeBlinkField.value = footerNotice.blink || '';
+          if (noticeBlinkWordField) {
+            noticeBlinkWordField.value = '';
+          }
         }
 
         function closePanel() {
@@ -2357,6 +2402,24 @@
             }
           });
         }
+        if (noticeBlinkAddButton) {
+          noticeBlinkAddButton.addEventListener('click', () => {
+            addBlinkWord(noticeBlinkWordField ? noticeBlinkWordField.value : '');
+            if (noticeBlinkWordField) {
+              noticeBlinkWordField.value = '';
+              noticeBlinkWordField.focus();
+            }
+          });
+        }
+        if (noticeBlinkWordField) {
+          noticeBlinkWordField.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              addBlinkWord(noticeBlinkWordField.value);
+              noticeBlinkWordField.value = '';
+            }
+          });
+        }
         if (noticeHighlightList) {
           noticeHighlightList.addEventListener('click', (event) => {
             const button = event.target.closest('button[data-highlight-index]');
@@ -2369,6 +2432,20 @@
             }
             noticeHighlights.splice(index, 1);
             renderHighlightList();
+          });
+        }
+        if (noticeBlinkList) {
+          noticeBlinkList.addEventListener('click', (event) => {
+            const button = event.target.closest('button[data-blink-index]');
+            if (!button) {
+              return;
+            }
+            const index = Number(button.getAttribute('data-blink-index'));
+            if (!Number.isFinite(index) || index < 0 || index >= noticeBlinks.length) {
+              return;
+            }
+            noticeBlinks.splice(index, 1);
+            renderBlinkList();
           });
         }
         undoButton.addEventListener('click', undoCurrent);
@@ -2403,7 +2480,7 @@
       }
 
       function advanceNoticeLanguage() {
-        currentNoticeLanguageIndex = (currentNoticeLanguageIndex + 1) % noticeLanguages.length;
+        currentNoticeLanguageIndex = (currentNoticeLanguageIndex + 1) % noticeLanguagePattern.length;
         updateFooterNotice(true);
         noticeLanguageTimer = window.setTimeout(advanceNoticeLanguage, noticeLoopDurationMs);
       }
