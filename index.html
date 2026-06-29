@@ -856,6 +856,10 @@
           <input id="admin-title" type="text" />
         </label>
         <label>
+          開始時刻
+          <input id="admin-time" type="text" placeholder="例: 09:30" />
+        </label>
+        <label>
           このプログラムの遅延/早発（分）
           <input id="admin-row-delay-minutes" type="number" step="1" value="0" />
         </label>
@@ -1743,19 +1747,20 @@
         const displayNo = Number.isFinite(config.displayNo) && Number(config.displayNo) > 0
           ? Math.trunc(Number(config.displayNo))
           : sourceNo;
+        const baseTime = config.time || item.time;
         const rowDelayMinutes = Number.isFinite(config.delayMinutes) ? Math.trunc(Number(config.delayMinutes)) : 0;
         const totalDelayMinutes = globalDelayMinutes + rowDelayMinutes;
         const speaker = language.key === 'ja'
           ? (config.speakerJa || getLocalizedText(item.speaker, language.key))
-          : ((config.speakerI18n && config.speakerI18n[language.key]) || getLocalizedText(item.speaker, language.key));
+          : ((config.speakerI18n && config.speakerI18n[language.key]) || config.speakerJa || getLocalizedText(item.speaker, language.key));
         const title = language.key === 'ja'
           ? (config.titleJa || getLocalizedText(item.titles, language.key))
-          : ((config.titleI18n && config.titleI18n[language.key]) || getLocalizedText(item.titles, language.key));
+          : ((config.titleI18n && config.titleI18n[language.key]) || config.titleJa || getLocalizedText(item.titles, language.key));
         const statusText = language.key === 'ja'
           ? (config.statusJa || getLocalizedText(item.statuses, language.key))
-          : ((config.statusI18n && config.statusI18n[language.key]) || getLocalizedText(item.statuses, language.key));
+          : ((config.statusI18n && config.statusI18n[language.key]) || config.statusJa || getLocalizedText(item.statuses, language.key));
         const placeText = getLocalizedText(item.gates, language.key);
-        const shiftedTime = applyDelayToTime(item.time, totalDelayMinutes);
+        const shiftedTime = applyDelayToTime(baseTime, totalDelayMinutes);
         const shiftedClass = totalDelayMinutes !== 0 ? ' time-shifted' : '';
         const delta = delayLabel(totalDelayMinutes);
         const effectiveStatusCode = config.statusCode || item.status;
@@ -1775,7 +1780,7 @@
             <div class="time-cell${shiftedClass}">
               ${totalDelayMinutes === 0
                 ? `<span class="time-main">${escapeHtml(shiftedTime)}</span>`
-                : `<span class="time-shift-wrap"><span class="time-old">${escapeHtml(item.time)}</span><span class="time-new">${escapeHtml(shiftedTime)}</span></span>`}
+                : `<span class="time-shift-wrap"><span class="time-old">${escapeHtml(baseTime)}</span><span class="time-new">${escapeHtml(shiftedTime)}</span></span>`}
               ${delta ? `<span class="time-delta">${escapeHtml(delta)}</span>` : ''}
             </div>
             <div class="status-cell ${statusClass[effectiveStatusCode] || ''}">
@@ -1801,6 +1806,7 @@
         const displayNoField = document.getElementById('admin-display-no');
         const speakerField = document.getElementById('admin-speaker');
         const titleField = document.getElementById('admin-title');
+        const timeField = document.getElementById('admin-time');
         const statusField = document.getElementById('admin-status');
         const rowDelayField = document.getElementById('admin-row-delay-minutes');
         const colorField = document.getElementById('admin-color');
@@ -1860,6 +1866,7 @@
             displayNoField.value = '';
             speakerField.value = '';
             titleField.value = '';
+            timeField.value = '--:--';
             statusField.value = '';
             rowDelayField.value = '0';
             colorField.value = '#ffd76b';
@@ -1876,6 +1883,7 @@
           );
           speakerField.value = config.speakerJa || item.speaker.ja || '';
           titleField.value = config.titleJa || item.titles.ja || '';
+          timeField.value = config.time || item.time || '--:--';
           statusField.value = config.statusJa || item.statuses.ja || '';
           rowDelayField.value = String(Number.isFinite(config.delayMinutes) ? Math.trunc(Number(config.delayMinutes)) : 0);
           delayField.value = String(globalDelayMinutes);
@@ -1914,6 +1922,7 @@
           const requestedDisplayNo = Number(displayNoField.value);
           const speakerJa = speakerField.value.trim();
           const titleJa = titleField.value.trim();
+          const baseTime = timeField.value.trim() || '--:--';
           const statusJa = statusField.value;
           const rowDelay = Number(rowDelayField.value || 0);
           const statusCode = statusCodeFromJa(statusJa, item.status);
@@ -1955,6 +1964,7 @@
             speakerI18n,
             titleI18n,
             statusI18n,
+            time: baseTime,
             delayMinutes: rowDelayMinutes,
             statusCode,
             color: colorField.value,
@@ -1965,6 +1975,7 @@
             next.displayNo === item.no &&
             next.speakerJa === (item.speaker.ja || '') &&
             next.titleJa === (item.titles.ja || '') &&
+            next.time === (item.time || '--:--') &&
             next.statusJa === (item.statuses.ja || '') &&
             next.delayMinutes === 0 &&
             next.statusCode === item.status &&
