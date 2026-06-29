@@ -1508,7 +1508,7 @@
           applyStateFromStorage(remote);
           sharedStateVersion = remoteVersion;
           saveAdminState();
-          renderBoard();
+          renderBoard(false);
           updateStatus();
           isApplyingSharedState = false;
         } catch (error) {
@@ -1742,7 +1742,7 @@
       function syncStateFromStorage() {
         const latest = loadAdminState();
         applyStateFromStorage(latest);
-        renderBoard();
+        renderBoard(false);
         updateStatus();
       }
 
@@ -1816,7 +1816,7 @@
         headPlace.textContent = place;
       }
 
-      function makeRow(item, index) {
+      function makeRow(item, index, withEnterAnimation) {
         const sourceNo = item.no ?? index + 1;
         const language = currentLanguage();
         const config = rowConfig(sourceNo);
@@ -1843,7 +1843,7 @@
         const delta = delayLabel(totalDelayMinutes);
         const effectiveStatusCode = config.statusCode || item.status;
         const numberClass = 'no-cell';
-        const rowClass = `row row-enter${config.color ? ' row-custom-accent' : ''}${config.blink ? ' row-custom-blink' : ''}`;
+        const rowClass = `row${withEnterAnimation ? ' row-enter' : ''}${config.color ? ' row-custom-accent' : ''}${config.blink ? ' row-custom-blink' : ''}`;
         const rowStyle = `animation-delay:${index * 40}ms;${config.color ? `--row-accent:${config.color};` : ''}`;
         return `
           <div class="${rowClass}" style="${rowStyle}">
@@ -2451,12 +2451,12 @@
         syncHistoryButtons();
       }
 
-      function renderBoard() {
+      function renderBoard(withEnterAnimation = true) {
         renderHeaders();
         const allRows = getDisplayFlights();
         const midpoint = Math.ceil(allRows.length / 2);
-        rows.innerHTML = allRows.slice(0, midpoint).map(makeRow).join('');
-        rows2.innerHTML = allRows.slice(midpoint).map((item, index) => makeRow(item, index + midpoint)).join('');
+        rows.innerHTML = allRows.slice(0, midpoint).map((item, index) => makeRow(item, index, withEnterAnimation)).join('');
+        rows2.innerHTML = allRows.slice(midpoint).map((item, index) => makeRow(item, index + midpoint, withEnterAnimation)).join('');
         updateFooterNotice();
       }
 
