@@ -844,12 +844,20 @@
           <select id="admin-no"></select>
         </label>
         <label>
+          プログラムNo.（表示）
+          <input id="admin-display-no" type="number" min="1" step="1" />
+        </label>
+        <label>
           公演者（日本語）
           <input id="admin-speaker" type="text" />
         </label>
         <label>
-          開演名（日本語）
+          プログラム名（日本語）
           <input id="admin-title" type="text" />
+        </label>
+        <label>
+          このプログラムの遅延/早発（分）
+          <input id="admin-row-delay-minutes" type="number" step="1" value="0" />
         </label>
         <label>
           状態（日本語）
@@ -1456,7 +1464,11 @@
           if (ta !== tb) {
             return ta - tb;
           }
-          return (a.no || 0) - (b.no || 0);
+          const ca = rowConfig(a.no || 0);
+          const cb = rowConfig(b.no || 0);
+          const na = Number.isFinite(ca.displayNo) && Number(ca.displayNo) > 0 ? Number(ca.displayNo) : (a.no || 0);
+          const nb = Number.isFinite(cb.displayNo) && Number(cb.displayNo) > 0 ? Number(cb.displayNo) : (b.no || 0);
+          return na - nb;
         });
         return rows;
       }
@@ -1500,20 +1512,20 @@
         return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
       }
 
-      function applyDelayToTime(baseTime) {
+      function applyDelayToTime(baseTime, minutesOffset) {
         const minutes = parseClockToMinutes(baseTime);
         if (!Number.isFinite(minutes)) {
           return baseTime;
         }
-        return formatMinutesToClock(minutes + globalDelayMinutes);
+        return formatMinutesToClock(minutes + minutesOffset);
       }
 
-      function delayLabel() {
-        if (!globalDelayMinutes) {
+      function delayLabel(totalDelayMinutes) {
+        if (!totalDelayMinutes) {
           return '';
         }
-        const sign = globalDelayMinutes > 0 ? '+' : '';
-        return `${sign}${globalDelayMinutes}m`;
+        const sign = totalDelayMinutes > 0 ? '+' : '';
+        return `${sign}${totalDelayMinutes}m`;
       }
 
       function statusCodeFromJa(statusJa, fallback) {
@@ -1685,9 +1697,14 @@
       }
 
       function makeRow(item, index) {
-        const number = item.no ?? index + 1;
+        const sourceNo = item.no ?? index + 1;
         const language = currentLanguage();
-        const config = rowConfig(number);
+        const config = rowConfig(sourceNo);
+        const displayNo = Number.isFinite(config.displayNo) && Number(config.displayNo) > 0
+          ? Math.trunc(Number(config.displayNo))
+          : sourceNo;
+        const rowDelayMinutes = Number.isFinite(config.delayMinutes) ? Math.trunc(Number(config.delayMinutes)) : 0;
+        const totalDelayMinutes = globalDelayMinutes + rowDelayMinutes;
         const speaker = language.key === 'ja'
           ? (config.speakerJa || getLocalizedText(item.speaker, language.key))
           : ((config.speakerI18n && config.speakerI18n[language.key]) || getLocalizedText(item.speaker, language.key));
@@ -1698,9 +1715,9 @@
           ? (config.statusJa || getLocalizedText(item.statuses, language.key))
           : ((config.statusI18n && config.statusI18n[language.key]) || getLocalizedText(item.statuses, language.key));
         const placeText = getLocalizedText(item.gates, language.key);
-        const shiftedTime = applyDelayToTime(item.time);
-        const shiftedClass = globalDelayMinutes !== 0 ? ' time-shifted' : '';
-        const delta = delayLabel();
+        const shiftedTime = applyDelayToTime(item.time, totalDelayMinutes);
+        const shiftedClass = totalDelayMinutes !== 0 ? ' time-shifted' : '';
+        const delta = delayLabel(totalDelayMinutes);
         const effectiveStatusCode = config.statusCode || item.status;
         const numberClass = 'no-cell';
         const rowClass = `row row-enter${config.color ? ' row-custom-accent' : ''}${config.blink ? ' row-custom-blink' : ''}`;
@@ -1710,13 +1727,13 @@
             <div class="airline-cell">
               <span class="airline-badge">${escapeHtml(speaker || '—')}</span>
             </div>
-            <div class="${numberClass}">${number}</div>
+            <div class="${numberClass}">${displayNo}</div>
             <div class="event-cell">
               <div class="event-title">${escapeHtml(title)}</div>
               <span class="lang-chip">${language.label}</span>
             </div>
             <div class="time-cell${shiftedClass}">
-              ${globalDelayMinutes === 0
+              ${totalDelayMinutes === 0
                 ? `<span class="time-main">${escapeHtml(shiftedTime)}</span>`
                 : `<span class="time-shift-wrap"><span class="time-old">${escapeHtml(item.time)}</span><span class="time-new">${escapeHtml(shiftedTime)}</span></span>`}
               ${delta ? `<span class="time-delta">${escapeHtml(delta)}</span>` : ''}
@@ -1741,9 +1758,11 @@
         const openButton = document.getElementById('admin-open');
         const panel = document.getElementById('admin-panel');
         const noField = document.getElementById('admin-no');
+        const displayNoField = document.getElementById('admin-display-no');
         const speakerField = document.getElementById('admin-speaker');
         const titleField = document.getElementById('admin-title');
         const statusField = document.getElementById('admin-status');
+        const rowDelayField = document.getElementById('admin-row-delay-minutes');
         const colorField = document.getElementById('admin-color');
         const blinkField = document.getElementById('admin-blink');
         const delayField = document.getElementById('admin-delay-minutes');
@@ -1774,8 +1793,13 @@
           const items = getAllAdminFlights();
           noField.innerHTML = items
             .map((item) => {
+              const config = rowConfig(item.no);
+              const displayNo = Number.isFinite(config.displayNo) && Number(config.displayNo) > 0
+                ? Math.trunc(Number(config.displayNo))
+                : item.no;
+              const displayTitle = config.titleJa || item.titles.ja || '新規案内';
               const removedTag = hiddenNos.has(item.no) ? ' [削除中]' : '';
-              return `<option value="${item.no}">No.${item.no} ${escapeHtml(item.titles.ja || '新規案内')}${removedTag}</option>`;
+              return `<option value="${item.no}">No.${displayNo} ${escapeHtml(displayTitle)}${removedTag}</option>`;
             })
             .join('');
           if (!items.length) {
@@ -1793,9 +1817,11 @@
         function applyForm(no) {
           const item = findAdminFlight(no);
           if (!item) {
+            displayNoField.value = '';
             speakerField.value = '';
             titleField.value = '';
             statusField.value = '';
+            rowDelayField.value = '0';
             colorField.value = '#ffd76b';
             blinkField.checked = false;
             delayField.value = String(globalDelayMinutes);
@@ -1803,9 +1829,15 @@
             return;
           }
           const config = rowConfig(no);
+          displayNoField.value = String(
+            Number.isFinite(config.displayNo) && Number(config.displayNo) > 0
+              ? Math.trunc(Number(config.displayNo))
+              : item.no
+          );
           speakerField.value = config.speakerJa || item.speaker.ja || '';
           titleField.value = config.titleJa || item.titles.ja || '';
           statusField.value = config.statusJa || item.statuses.ja || '';
+          rowDelayField.value = String(Number.isFinite(config.delayMinutes) ? Math.trunc(Number(config.delayMinutes)) : 0);
           delayField.value = String(globalDelayMinutes);
           colorField.value = config.color || '#ffd76b';
           blinkField.checked = Boolean(config.blink);
@@ -1839,10 +1871,16 @@
             return;
           }
           const previous = rowConfig(no);
+          const requestedDisplayNo = Number(displayNoField.value);
           const speakerJa = speakerField.value.trim();
           const titleJa = titleField.value.trim();
           const statusJa = statusField.value;
+          const rowDelay = Number(rowDelayField.value || 0);
           const statusCode = statusCodeFromJa(statusJa, item.status);
+          const displayNo = Number.isFinite(requestedDisplayNo) && requestedDisplayNo > 0
+            ? Math.trunc(requestedDisplayNo)
+            : item.no;
+          const rowDelayMinutes = Number.isFinite(rowDelay) ? Math.trunc(rowDelay) : 0;
 
           saveButton.disabled = true;
           delaySaveButton.disabled = true;
@@ -1870,21 +1908,25 @@
           ]);
 
           const next = {
+            displayNo,
             speakerJa,
             titleJa,
             statusJa,
             speakerI18n,
             titleI18n,
             statusI18n,
+            delayMinutes: rowDelayMinutes,
             statusCode,
             color: colorField.value,
             blink: blinkField.checked
           };
 
           const isDefault =
+            next.displayNo === item.no &&
             next.speakerJa === (item.speaker.ja || '') &&
             next.titleJa === (item.titles.ja || '') &&
             next.statusJa === (item.statuses.ja || '') &&
+            next.delayMinutes === 0 &&
             next.statusCode === item.status &&
             next.color === '#ffd76b' &&
             next.blink === false;
