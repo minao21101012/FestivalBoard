@@ -472,8 +472,7 @@
       }
 
       .footer-note-track {
-        display: inline-flex;
-        align-items: center;
+        display: inline-block;
         width: max-content;
         white-space: nowrap;
         will-change: transform;
@@ -766,10 +765,10 @@
 
       @keyframes noteMarquee {
         0% {
-          transform: translateX(0);
+          transform: translateX(100%);
         }
         100% {
-          transform: translateX(-50%);
+          transform: translateX(-100%);
         }
       }
 
@@ -1694,7 +1693,7 @@
           return;
         }
         const rendered = renderNoticeHtml(base, footerNotice.highlight, footerNotice.blink);
-        const duration = Math.min(60, Math.max(18, Math.ceil(rendered.replace(/<[^>]*>/g, '').length * 0.45)));
+        const duration = Math.min(80, Math.max(20, Math.ceil(rendered.replace(/<[^>]*>/g, '').length * 0.55)));
         const nextKey = `${lang}|${base}|${footerNotice.highlight || ''}|${footerNotice.blink || ''}|${duration}`;
         if (!forceUpdate && noticeNode.getAttribute('data-notice-key') === nextKey) {
           return;
@@ -1706,7 +1705,6 @@
         noticeNode.innerHTML = `
           <span class="footer-note-track" aria-label="${escapeHtml(base)}">
             <span class="footer-note-piece">${rendered}</span>
-            <span class="footer-note-piece" aria-hidden="true">${rendered}</span>
           </span>
         `;
       }
