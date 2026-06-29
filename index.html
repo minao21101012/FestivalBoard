@@ -860,6 +860,10 @@
           <input id="admin-time" type="text" placeholder="例: 09:30" />
         </label>
         <label>
+          開催場所（日本語）
+          <input id="admin-place" type="text" />
+        </label>
+        <label>
           このプログラムの遅延/早発（分）
           <input id="admin-row-delay-minutes" type="number" step="1" value="0" />
         </label>
@@ -1759,7 +1763,9 @@
         const statusText = language.key === 'ja'
           ? (config.statusJa || getLocalizedText(item.statuses, language.key))
           : ((config.statusI18n && config.statusI18n[language.key]) || config.statusJa || getLocalizedText(item.statuses, language.key));
-        const placeText = getLocalizedText(item.gates, language.key);
+        const placeText = language.key === 'ja'
+          ? (config.placeJa || getLocalizedText(item.gates, language.key))
+          : ((config.placeI18n && config.placeI18n[language.key]) || config.placeJa || getLocalizedText(item.gates, language.key));
         const shiftedTime = applyDelayToTime(baseTime, totalDelayMinutes);
         const shiftedClass = totalDelayMinutes !== 0 ? ' time-shifted' : '';
         const delta = delayLabel(totalDelayMinutes);
@@ -1807,6 +1813,7 @@
         const speakerField = document.getElementById('admin-speaker');
         const titleField = document.getElementById('admin-title');
         const timeField = document.getElementById('admin-time');
+        const placeField = document.getElementById('admin-place');
         const statusField = document.getElementById('admin-status');
         const rowDelayField = document.getElementById('admin-row-delay-minutes');
         const colorField = document.getElementById('admin-color');
@@ -1867,6 +1874,7 @@
             speakerField.value = '';
             titleField.value = '';
             timeField.value = '--:--';
+            placeField.value = '';
             statusField.value = '';
             rowDelayField.value = '0';
             colorField.value = '#ffd76b';
@@ -1884,6 +1892,7 @@
           speakerField.value = config.speakerJa || item.speaker.ja || '';
           titleField.value = config.titleJa || item.titles.ja || '';
           timeField.value = config.time || item.time || '--:--';
+          placeField.value = config.placeJa || item.gates.ja || '';
           statusField.value = config.statusJa || item.statuses.ja || '';
           rowDelayField.value = String(Number.isFinite(config.delayMinutes) ? Math.trunc(Number(config.delayMinutes)) : 0);
           delayField.value = String(globalDelayMinutes);
@@ -1923,6 +1932,7 @@
           const speakerJa = speakerField.value.trim();
           const titleJa = titleField.value.trim();
           const baseTime = timeField.value.trim() || '--:--';
+          const placeJa = placeField.value.trim() || (item.gates.ja || '');
           const statusJa = statusField.value;
           const rowDelay = Number(rowDelayField.value || 0);
           const statusCode = statusCodeFromJa(statusJa, item.status);
@@ -1938,7 +1948,7 @@
           redoButton.disabled = true;
           note.textContent = '翻訳中...';
 
-          const [speakerI18n, titleI18n, statusI18n] = await Promise.all([
+          const [speakerI18n, titleI18n, statusI18n, placeI18n] = await Promise.all([
             buildAutoTranslations(
               speakerJa,
               previous.speakerI18n,
@@ -1953,6 +1963,11 @@
               statusJa,
               previous.statusI18n,
               previous.statusJa === statusJa
+            ),
+            buildAutoTranslations(
+              placeJa,
+              previous.placeI18n,
+              previous.placeJa === placeJa
             )
           ]);
 
@@ -1965,6 +1980,8 @@
             titleI18n,
             statusI18n,
             time: baseTime,
+            placeJa,
+            placeI18n,
             delayMinutes: rowDelayMinutes,
             statusCode,
             color: colorField.value,
@@ -1976,6 +1993,7 @@
             next.speakerJa === (item.speaker.ja || '') &&
             next.titleJa === (item.titles.ja || '') &&
             next.time === (item.time || '--:--') &&
+            next.placeJa === (item.gates.ja || '') &&
             next.statusJa === (item.statuses.ja || '') &&
             next.delayMinutes === 0 &&
             next.statusCode === item.status &&
