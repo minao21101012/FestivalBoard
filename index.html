@@ -1242,6 +1242,7 @@
       let currentNoticeLanguageIndex = 0;
       let languageTimer = null;
       let noticeLanguageTimer = null;
+      let noticeLoopDurationMs = 22000;
 
       const headerLabels = {
         ja: ['公演者', '番号', '開演名', '時刻', '状態', '場所'],
@@ -1614,7 +1615,7 @@
         return noticeLanguages[currentNoticeLanguageIndex % noticeLanguages.length];
       }
 
-      function updateFooterNotice() {
+      function updateFooterNotice(forceUpdate) {
         const noticeNode = document.getElementById('custom-note');
         if (!noticeNode) {
           return;
@@ -1624,10 +1625,19 @@
         if (!base) {
           noticeNode.innerHTML = '';
           noticeNode.style.removeProperty('--note-duration');
+          noticeNode.removeAttribute('data-notice-key');
+          noticeLoopDurationMs = 22000;
           return;
         }
         const rendered = renderNoticeHtml(base, footerNotice.highlight, footerNotice.blink);
         const duration = Math.min(60, Math.max(18, Math.ceil(rendered.replace(/<[^>]*>/g, '').length * 0.45)));
+        const nextKey = `${lang}|${base}|${footerNotice.highlight || ''}|${footerNotice.blink || ''}|${duration}`;
+        if (!forceUpdate && noticeNode.getAttribute('data-notice-key') === nextKey) {
+          return;
+        }
+
+        noticeNode.setAttribute('data-notice-key', nextKey);
+        noticeLoopDurationMs = duration * 1000;
         noticeNode.style.setProperty('--note-duration', `${duration}s`);
         noticeNode.innerHTML = `
           <span class="footer-note-track" aria-label="${escapeHtml(base)}">
@@ -2264,10 +2274,8 @@
 
       function advanceNoticeLanguage() {
         currentNoticeLanguageIndex = (currentNoticeLanguageIndex + 1) % noticeLanguages.length;
-        updateFooterNotice();
-
-        const duration = currentNoticeLanguage().key === 'ja' ? 10000 : 5000;
-        noticeLanguageTimer = window.setTimeout(advanceNoticeLanguage, duration);
+        updateFooterNotice(true);
+        noticeLanguageTimer = window.setTimeout(advanceNoticeLanguage, noticeLoopDurationMs);
       }
 
       renderClock();
@@ -2296,7 +2304,7 @@
       setInterval(updateStatus, 15000);
       setInterval(pullSharedState, 2000);
       languageTimer = window.setTimeout(advanceLanguage, 10000);
-      noticeLanguageTimer = window.setTimeout(advanceNoticeLanguage, 10000);
+      noticeLanguageTimer = window.setTimeout(advanceNoticeLanguage, noticeLoopDurationMs);
     </script>
   </body>
 </html>
